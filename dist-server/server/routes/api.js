@@ -669,7 +669,7 @@ apiRouter.get('/journal', (req, res) => {
     res.json(row);
 });
 apiRouter.get('/journal/recent', (req, res) => {
-    const limit = Math.min(60, Math.max(1, Number(req.query.limit) || 20));
+    const limit = Math.min(365, Math.max(1, Number(req.query.limit) || 100));
     const db = getDb();
     const rows = db
         .prepare('SELECT * FROM journal_entries ORDER BY entry_date DESC LIMIT ?')

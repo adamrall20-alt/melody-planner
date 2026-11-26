@@ -3,14 +3,62 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 const SYNC_TO_DRIVE_ROOT = path.join(os.homedir(), 'Sync to Drive');
+function findGoogleDriveMyDrive() {
+    // macOS Google Drive for Desktop: ~/Library/CloudStorage/GoogleDrive-*/My Drive
+    const cloudStorage = path.join(os.homedir(), 'Library', 'CloudStorage');
+    if (fs.existsSync(cloudStorage)) {
+        try {
+            const entries = fs.readdirSync(cloudStorage);
+            for (const entry of entries) {
+                if (entry.startsWith('GoogleDrive-')) {
+                    const myDrive = path.join(cloudStorage, entry, 'My Drive');
+                    if (fs.existsSync(myDrive))
+                        return myDrive;
+                }
+            }
+        }
+        catch {
+            // ignore permission errors
+        }
+    }
+    // Windows / alternative Google Drive paths
+    const candidates = [
+        path.join(os.homedir(), 'Google Drive', 'My Drive'),
+        'G:\\My Drive',
+    ];
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate))
+            return candidate;
+    }
+    return null;
+}
 export function getDataDir() {
     if (process.env.MELODY_DATA_DIR) {
         return path.resolve(process.env.MELODY_DATA_DIR);
+    }
+    const myDrive = findGoogleDriveMyDrive();
+    if (myDrive) {
+        return path.join(myDrive, 'Melody Planner');
     }
     if (fs.existsSync(SYNC_TO_DRIVE_ROOT)) {
         return path.join(SYNC_TO_DRIVE_ROOT, 'Melody Planner');
     }
     return path.resolve(process.cwd(), 'data');
+}
+function copyDirRecursive(src, dest) {
+    if (!fs.existsSync(src))
+        return;
+    fs.mkdirSync(dest, { recursive: true });
+    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+        const srcPath = path.join(src, entry.name);
+        const destPath = path.join(dest, entry.name);
+        if (entry.isDirectory()) {
+            copyDirRecursive(srcPath, destPath);
+        }
+        else if (!fs.existsSync(destPath)) {
+            fs.copyFileSync(srcPath, destPath);
+        }
+    }
 }
 export function getMediaDir(kind) {
     const base = path.join(getDataDir(), 'media');
@@ -27,11 +75,21 @@ export function getDb() {
     fs.mkdirSync(dataDir, { recursive: true });
     fs.mkdirSync(getMediaDir('image'), { recursive: true });
     fs.mkdirSync(getMediaDir('voice'), { recursive: true });
-    // Migrate any existing local ./data/melody.db into Sync to Drive on first run
-    const legacyDb = path.resolve(process.cwd(), 'data', 'melody.db');
-    if (!fs.existsSync(dbPath) && fs.existsSync(legacyDb) && legacyDb !== dbPath) {
-        fs.copyFileSync(legacyDb, dbPath);
-        console.log(`[Melody Planner] Migrated existing database to ${dbPath}`);
+    // Migrate existing DB & media from ~/Sync to Drive/Melody Planner or ./data into Google Drive My Drive
+    const migrationSources = [
+        path.join(SYNC_TO_DRIVE_ROOT, 'Melody Planner'),
+        path.resolve(process.cwd(), 'data'),
+    ];
+    if (!fs.existsSync(dbPath)) {
+        for (const srcDir of migrationSources) {
+            const srcDb = path.join(srcDir, 'melody.db');
+            if (srcDir !== dataDir && fs.existsSync(srcDb)) {
+                fs.copyFileSync(srcDb, dbPath);
+                copyDirRecursive(path.join(srcDir, 'media'), path.join(dataDir, 'media'));
+                console.log(`[Melody Planner] Migrated existing database & media from ${srcDir} to ${dataDir}`);
+                break;
+            }
+        }
     }
     const db = new Database(dbPath);
     // Single-file journal mode is safest for Google Drive / cloud-synced folders

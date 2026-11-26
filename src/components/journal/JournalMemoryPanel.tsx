@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react';
-import { BookHeart, Sparkles, Save, Trash2, Plus, Check } from 'lucide-react';
+import {
+  BookHeart,
+  Sparkles,
+  Save,
+  Trash2,
+  Plus,
+  Check,
+  History,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 import type { JournalEntry, MediaItem, MemoryItem } from '@shared/types';
 import { api } from '@/lib/api';
 
@@ -12,12 +23,20 @@ interface JournalMemoryPanelProps {
 const MEMORY_TAGS = ['Fun', 'Milestone', 'Cozy', 'Learning', 'Funny'];
 const MOOD_LABELS = ['Rough', 'Low', 'Okay', 'Good', 'Great'];
 
+function shiftDate(dateStr: string, delta: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + delta);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(
+    dt.getDate()
+  ).padStart(2, '0')}`;
+}
+
 export function JournalMemoryPanel({
   selectedDate,
   onSelectDate,
   onCelebrate,
 }: JournalMemoryPanelProps) {
-  const [subView, setSubView] = useState<'journal' | 'memories'>('journal');
+  const [subView, setSubView] = useState<'journal' | 'past' | 'memories'>('journal');
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -28,6 +47,7 @@ export function JournalMemoryPanel({
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
   const [recentJournals, setRecentJournals] = useState<JournalEntry[]>([]);
+  const [journalSearch, setJournalSearch] = useState('');
 
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [images, setImages] = useState<MediaItem[]>([]);
@@ -41,7 +61,7 @@ export function JournalMemoryPanel({
     try {
       const [entry, recent] = await Promise.all([
         api.getJournal(selectedDate),
-        api.getRecentJournals(12),
+        api.getRecentJournals(100),
       ]);
       setTitle(entry.title || '');
       setContent(entry.content || '');
@@ -89,8 +109,9 @@ export function JournalMemoryPanel({
       });
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 2000);
-      const recent = await api.getRecentJournals(12);
+      const recent = await api.getRecentJournals(100);
       setRecentJournals(recent);
+      onCelebrate();
     } finally {
       setSaving(false);
     }
@@ -118,37 +139,93 @@ export function JournalMemoryPanel({
     void loadMemoriesData();
   };
 
+  const openPastEntry = (date: string) => {
+    onSelectDate(date);
+    setSubView('journal');
+  };
+
+  const filteredJournals = recentJournals.filter((j) => {
+    const q = journalSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      j.entry_date.toLowerCase().includes(q) ||
+      (j.title || '').toLowerCase().includes(q) ||
+      (j.content || '').toLowerCase().includes(q) ||
+      (j.reflection_learned || '').toLowerCase().includes(q) ||
+      (j.reflection_gratitude || '').toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-4">
-      {/* Clean Pill Sub-navigation */}
-      <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-glass)] p-1 sm:inline-grid sm:w-auto">
-        <button
-          type="button"
-          onClick={() => setSubView('journal')}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-extrabold transition ${
-            subView === 'journal'
-              ? 'bg-[var(--pastel-mint)] text-[var(--text-main)] shadow-xs'
-              : 'text-[var(--text-muted)]'
-          }`}
-        >
-          <BookHeart className="h-3.5 w-3.5" />
-          Journal
-        </button>
-        <button
-          type="button"
-          onClick={() => setSubView('memories')}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-extrabold transition ${
-            subView === 'memories'
-              ? 'bg-[var(--pastel-pink)] text-[var(--text-main)] shadow-xs'
-              : 'text-[var(--text-muted)]'
-          }`}
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          Memories ({memories.length})
-        </button>
+      {/* Clean Pill Sub-navigation: Write, Past Journals, Memories */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="grid w-full grid-cols-3 gap-1.5 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-glass)] p-1 sm:inline-grid sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setSubView('journal')}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-extrabold transition ${
+              subView === 'journal'
+                ? 'bg-[var(--pastel-mint)] text-[var(--text-main)] shadow-xs'
+                : 'text-[var(--text-muted)]'
+            }`}
+          >
+            <BookHeart className="h-3.5 w-3.5" />
+            Journal
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubView('past')}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-extrabold transition ${
+              subView === 'past'
+                ? 'bg-[var(--pastel-sky)] text-[var(--text-main)] shadow-xs'
+                : 'text-[var(--text-muted)]'
+            }`}
+          >
+            <History className="h-3.5 w-3.5" />
+            Past ({recentJournals.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubView('memories')}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-extrabold transition ${
+              subView === 'memories'
+                ? 'bg-[var(--pastel-pink)] text-[var(--text-main)] shadow-xs'
+                : 'text-[var(--text-muted)]'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Memories ({memories.length})
+          </button>
+        </div>
+
+        {/* Quick Prev / Next Day buttons */}
+        {subView === 'journal' && (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onSelectDate(shiftDate(selectedDate, -1))}
+              className="inline-flex items-center gap-1 rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs font-bold text-[var(--text-main)] hover:brightness-95"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Prev Day
+            </button>
+            <span className="rounded-xl bg-[var(--pastel-butter)] px-2.5 py-1.5 font-mono text-xs font-bold text-[var(--text-main)]">
+              {selectedDate}
+            </span>
+            <button
+              type="button"
+              onClick={() => onSelectDate(shiftDate(selectedDate, 1))}
+              className="inline-flex items-center gap-1 rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs font-bold text-[var(--text-main)] hover:brightness-95"
+            >
+              Next
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
-      {subView === 'journal' ? (
+      {subView === 'journal' && (
         <div className="grid gap-4 xl:grid-cols-[1fr_240px]">
           <section className="cozy-card cozy-card-peach space-y-4 rounded-3xl p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -157,7 +234,7 @@ export function JournalMemoryPanel({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder={`Journal — ${selectedDate}`}
-                className="flex-1 bg-transparent text-lg font-bold text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none"
+                className="flex-1 bg-transparent text-lg font-extrabold text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none"
               />
               <button
                 type="button"
@@ -185,7 +262,7 @@ export function JournalMemoryPanel({
                       className={`rounded-full px-3 py-1 font-bold transition ${
                         active
                           ? 'bg-[var(--pastel-butter)] text-[var(--text-main)] ring-1 ring-[var(--accent)]'
-                          : 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'
+                          : 'bg-[var(--bg-card)]/80 text-[var(--text-muted)]'
                       }`}
                     >
                       {label}
@@ -221,7 +298,7 @@ export function JournalMemoryPanel({
                   className="w-full resize-none bg-transparent text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:outline-none"
                 />
               </div>
-              <div className="rounded-2xl p-3.5" style={{ background: 'var(--pastel-peach)' }}>
+              <div className="rounded-2xl p-3.5" style={{ background: 'var(--pastel-butter)' }}>
                 <label className="mb-1.5 block text-[11px] font-bold tracking-wider text-[var(--text-main)] uppercase">
                   Highlight / Reflection
                 </label>
@@ -251,14 +328,23 @@ export function JournalMemoryPanel({
           </section>
 
           <aside className="cozy-card cozy-card-sky rounded-3xl p-4">
-            <h3 className="mb-2.5 text-xs font-bold tracking-wider text-[var(--text-muted)] uppercase">
-              Recent Entries
-            </h3>
+            <div className="mb-2.5 flex items-center justify-between">
+              <h3 className="text-xs font-extrabold tracking-wider text-[var(--text-muted)] uppercase">
+                Past Entries ({recentJournals.length})
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSubView('past')}
+                className="text-[11px] font-bold text-[var(--accent)] hover:underline"
+              >
+                View all
+              </button>
+            </div>
             {recentJournals.length === 0 ? (
               <p className="text-xs text-[var(--text-muted)]">No saved entries yet.</p>
             ) : (
               <div className="space-y-1.5">
-                {recentJournals.map((entry) => {
+                {recentJournals.slice(0, 12).map((entry) => {
                   const active = entry.entry_date === selectedDate;
                   return (
                     <button
@@ -268,13 +354,18 @@ export function JournalMemoryPanel({
                       className={`w-full rounded-2xl px-3 py-2 text-left transition ${
                         active
                           ? 'bg-[var(--pastel-sky)] text-[var(--text-main)] ring-1 ring-[var(--accent)]'
-                          : 'bg-[var(--bg-subtle)] text-[var(--text-main)]'
+                          : 'bg-[var(--bg-card)]/80 text-[var(--text-main)] hover:brightness-95'
                       }`}
                     >
-                      <p className="font-mono text-[11px] text-[var(--text-muted)]">
-                        {entry.entry_date}
-                      </p>
-                      <p className="truncate text-xs font-bold">
+                      <div className="flex items-center justify-between">
+                        <p className="font-mono text-[11px] text-[var(--text-muted)]">
+                          {entry.entry_date}
+                        </p>
+                        <span className="rounded-full bg-[var(--pastel-butter)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--text-main)]">
+                          {MOOD_LABELS[(entry.mood_rating || 3) - 1] ?? 'Okay'}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 truncate text-xs font-bold">
                         {entry.title || entry.content?.slice(0, 32) || 'Untitled Entry'}
                       </p>
                     </button>
@@ -284,10 +375,87 @@ export function JournalMemoryPanel({
             )}
           </aside>
         </div>
-      ) : (
+      )}
+
+      {subView === 'past' && (
+        <section className="cozy-card cozy-card-sky space-y-4 rounded-3xl p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-extrabold text-[var(--text-main)]">
+                Past Journal Entries ({filteredJournals.length})
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                Tap any entry to read or edit it.
+              </p>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute top-2.5 left-3 h-3.5 w-3.5 text-[var(--text-muted)]" />
+              <input
+                type="text"
+                value={journalSearch}
+                onChange={(e) => setJournalSearch(e.target.value)}
+                placeholder="Search past journals..."
+                className="w-full rounded-2xl border border-[var(--border-card)] bg-[var(--bg-input)] py-2 pr-3 pl-8 text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {filteredJournals.length === 0 ? (
+            <div className="rounded-2xl bg-[var(--bg-card)]/80 p-8 text-center text-xs text-[var(--text-muted)]">
+              {recentJournals.length === 0
+                ? 'No saved journal entries yet. Write your first one in the Journal tab and hit Save!'
+                : 'No entries match your search.'}
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {filteredJournals.map((entry) => (
+                <button
+                  key={entry.entry_date}
+                  type="button"
+                  onClick={() => openPastEntry(entry.entry_date)}
+                  className="flex flex-col rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] p-4 text-left transition hover:border-[var(--accent)] hover:shadow-sm"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-bold text-[var(--accent)]">
+                      {entry.entry_date}
+                    </span>
+                    <span className="rounded-full bg-[var(--pastel-butter)] px-2.5 py-0.5 text-[10px] font-extrabold text-[var(--text-main)]">
+                      {MOOD_LABELS[(entry.mood_rating || 3) - 1] ?? 'Okay'}
+                    </span>
+                  </div>
+                  <h4 className="mt-1.5 text-sm font-extrabold text-[var(--text-main)]">
+                    {entry.title || 'Untitled Entry'}
+                  </h4>
+                  {entry.content && (
+                    <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-[var(--text-muted)]">
+                      {entry.content}
+                    </p>
+                  )}
+                  {(entry.reflection_learned || entry.reflection_gratitude) && (
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {entry.reflection_learned && (
+                        <span className="max-w-full truncate rounded-lg bg-[var(--pastel-mint)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-main)]">
+                          Learned: {entry.reflection_learned}
+                        </span>
+                      )}
+                      {entry.reflection_gratitude && (
+                        <span className="max-w-full truncate rounded-lg bg-[var(--pastel-peach)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-main)]">
+                          Highlight: {entry.reflection_gratitude}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {subView === 'memories' && (
         <div className="space-y-4">
           <section className="cozy-card cozy-card-pink rounded-3xl p-5">
-            <h3 className="mb-3 text-sm font-bold text-[var(--text-main)]">Save a Memory</h3>
+            <h3 className="mb-3 text-sm font-extrabold text-[var(--text-main)]">Save a Memory</h3>
             <form onSubmit={(e) => void handleAddMemory(e)} className="space-y-2.5">
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
@@ -353,7 +521,7 @@ export function JournalMemoryPanel({
               className={`rounded-full px-3 py-1 font-bold transition ${
                 filterTag === ''
                   ? 'bg-[var(--pastel-sky)] text-[var(--text-main)] ring-1 ring-[var(--accent)]'
-                  : 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'
+                  : 'bg-[var(--bg-card)]/80 text-[var(--text-muted)]'
               }`}
             >
               All
@@ -366,7 +534,7 @@ export function JournalMemoryPanel({
                 className={`rounded-full px-3 py-1 font-bold transition ${
                   filterTag === t
                     ? 'bg-[var(--pastel-sky)] text-[var(--text-main)] ring-1 ring-[var(--accent)]'
-                    : 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'
+                    : 'bg-[var(--bg-card)]/80 text-[var(--text-muted)]'
                 }`}
               >
                 {t}

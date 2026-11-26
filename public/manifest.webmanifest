@@ -1,0 +1,23 @@
+{
+  "name": "Melody Planner",
+  "short_name": "Melody",
+  "description": "Cozy life planner with 3D companion, study focus, quests, journal, and time tracking.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#d6f0fc",
+  "theme_color": "#d6f0fc",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
