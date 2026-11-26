@@ -254,7 +254,6 @@ export function App() {
           <div className="hidden min-h-0 lg:block">
             <MelodyCompanion
               mood={mood}
-              onMoodChange={setMood}
               activeActivityLabel={runningEntry?.title ?? null}
               theme={settings.theme}
               eyeTracking={settings.eye_tracking}

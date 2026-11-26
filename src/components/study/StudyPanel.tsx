@@ -53,11 +53,12 @@ const AMBIENT_TRACKS: {
   label: string;
   icon: typeof CloudRain;
   bg: string;
+  accent: string;
 }[] = [
-  { id: 'rain', label: 'Soft Rain', icon: CloudRain, bg: 'var(--pastel-sky)' },
-  { id: 'cafe', label: 'Cozy Hum', icon: Coffee, bg: 'var(--pastel-butter)' },
-  { id: 'fire', label: 'Fireplace', icon: Flame, bg: 'var(--pastel-peach)' },
-  { id: 'waves', label: 'Ocean Waves', icon: Waves, bg: 'var(--pastel-mint)' },
+  { id: 'rain', label: 'Soft Rain', icon: CloudRain, bg: 'var(--pastel-sky)', accent: '#38bdf8' },
+  { id: 'cafe', label: 'Cozy Hum', icon: Coffee, bg: 'var(--pastel-butter)', accent: '#f59e0b' },
+  { id: 'fire', label: 'Fireplace', icon: Flame, bg: 'var(--pastel-peach)', accent: '#fb7185' },
+  { id: 'waves', label: 'Ocean', icon: Waves, bg: 'var(--pastel-mint)', accent: '#34d399' },
 ];
 
 export function StudyPanel({
@@ -482,27 +483,41 @@ export function StudyPanel({
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             {AMBIENT_TRACKS.map((track) => {
               const Icon = track.icon;
               const active = playingTracks[track.id];
+              const pct = Math.round(volumes[track.id] * 100);
               return (
                 <div
                   key={track.id}
-                  className={`rounded-2xl border p-2.5 transition ${
+                  className={`rounded-2xl border p-3 transition ${
                     active
-                      ? 'border-[var(--accent)] shadow-xs'
-                      : 'border-[var(--border-card)] bg-[var(--bg-subtle)]/60'
+                      ? 'border-[var(--accent)] shadow-sm'
+                      : 'border-[var(--border-card)] bg-[var(--bg-subtle)]/70'
                   }`}
                   style={active ? { background: track.bg } : undefined}
                 >
                   <button
                     type="button"
                     onClick={() => handleToggleTrack(track.id)}
-                    className="flex w-full items-center gap-2 text-left text-xs font-bold text-[var(--text-main)]"
+                    className="flex w-full items-center justify-between gap-1.5 text-left text-xs font-extrabold text-[var(--text-main)]"
                   >
-                    <Icon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{track.label}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg"
+                        style={{
+                          background: active ? track.accent : 'var(--bg-card)',
+                          color: active ? '#ffffff' : track.accent,
+                        }}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="truncate">{track.label}</span>
+                    </span>
+                    <span className="font-mono text-[10px] font-bold text-[var(--text-muted)]">
+                      {active ? `${pct}%` : 'Off'}
+                    </span>
                   </button>
                   <input
                     type="range"
@@ -511,7 +526,13 @@ export function StudyPanel({
                     step={0.05}
                     value={volumes[track.id]}
                     onChange={(e) => handleVolumeChange(track.id, Number(e.target.value))}
-                    className="mt-2 h-1.5 w-full cursor-pointer accent-[var(--accent)]"
+                    className="cozy-slider mt-3 w-full"
+                    style={
+                      {
+                        '--slider-color': track.accent,
+                        background: `linear-gradient(to right, ${track.accent} 0%, ${track.accent} ${pct}%, rgba(148, 163, 184, 0.28) ${pct}%, rgba(148, 163, 184, 0.28) 100%)`,
+                      } as React.CSSProperties
+                    }
                   />
                 </div>
               );

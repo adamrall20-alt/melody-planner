@@ -133,3 +133,40 @@ html.theme-dark {
 .app-no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* Stylized Cozy Range Sliders for Ambient Focus Sounds */
+.cozy-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 7px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.cozy-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2.5px solid var(--slider-color, var(--accent));
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.22);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.cozy-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.22);
+}
+
+.cozy-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2.5px solid var(--slider-color, var(--accent));
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.22);
+}

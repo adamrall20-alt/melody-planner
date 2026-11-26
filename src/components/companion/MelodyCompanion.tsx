@@ -9,28 +9,18 @@ import {
   type VRMAnimation,
 } from '@pixiv/three-vrm-animation';
 import type { AppTheme, CompanionMood } from '@shared/types';
-import { Sparkles, Coffee, BookOpen, PartyPopper } from 'lucide-react';
 
 interface MelodyCompanionProps {
   mood: CompanionMood;
-  onMoodChange: (mood: CompanionMood) => void;
   activeActivityLabel?: string | null;
   theme: AppTheme;
   eyeTracking: boolean;
 }
 
-const MOOD_OPTIONS: { id: CompanionMood; label: string; icon: typeof Sparkles }[] = [
-  { id: 'idle', label: 'Cozy', icon: Sparkles },
-  { id: 'focus', label: 'Study', icon: BookOpen },
-  { id: 'relax', label: 'Chill', icon: Coffee },
-  { id: 'celebrate', label: 'Yay', icon: PartyPopper },
-];
-
 const CROSSFADE_SEC = 0.45;
 
 export function MelodyCompanion({
   mood,
-  onMoodChange,
   activeActivityLabel,
   theme,
   eyeTracking,
@@ -465,34 +455,15 @@ export function MelodyCompanion({
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
               {activeActivityLabel}
             </span>
+          ) : mood === 'celebrate' ? (
+            <span className="rounded-full bg-[var(--pastel-butter)] px-3 py-1 text-[11px] font-bold text-[var(--text-main)] ring-1 ring-[var(--border-card)]">
+              Yay!
+            </span>
           ) : (
             <span className="rounded-full bg-[var(--bg-glass)] px-3 py-1 text-[11px] font-medium text-[var(--text-muted)] ring-1 ring-[var(--border-card)] backdrop-blur">
               Chilling
             </span>
           )}
-        </div>
-
-        {/* Floating Mood / Pose Selector */}
-        <div className="absolute right-3 bottom-3 left-3 grid grid-cols-4 gap-1 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-glass)] p-1.5 shadow-sm backdrop-blur">
-          {MOOD_OPTIONS.map((opt) => {
-            const Icon = opt.icon;
-            const active = mood === opt.id;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => onMoodChange(opt.id)}
-                className={`flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-semibold transition ${
-                  active
-                    ? 'bg-[var(--accent)] text-[var(--accent-ink)] shadow-sm'
-                    : 'text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)]'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {opt.label}
-              </button>
-            );
-          })}
         </div>
       </div>
     </aside>

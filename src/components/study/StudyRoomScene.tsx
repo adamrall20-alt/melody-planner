@@ -201,8 +201,8 @@ export function StudyRoomScene({
           vrm.lookAt.target = lookAtTarget;
         }
 
-        // Rest Melody comfortably on top of the quilted duvet (duvet top y ≈ 0.58)
-        vrm.scene.position.set(0, 0.74, -0.22);
+        // Rest Melody flush on top of the quilted duvet (duvet top y ≈ 0.58)
+        vrm.scene.position.set(0, 0.635, -0.22);
         scene.add(vrm.scene);
         currentVrm = vrm;
 
@@ -322,35 +322,47 @@ export function StudyRoomScene({
 
           if (hips) {
             hips.position.y = -0.02;
-            hips.rotation.x = 1.44;
+            hips.rotation.x = 1.52;
             hips.rotation.y = 0;
             hips.rotation.z = Math.sin(elapsed * 0.9) * 0.015;
           }
-          // Arch upper torso comfortably above the duvet
+          // Arch upper torso gently off the duvet
           if (spine) spine.rotation.x = -0.34 + Math.sin(elapsed * 1.5) * 0.015;
-          if (chest) chest.rotation.x = -0.34;
-          if (upperChest) upperChest.rotation.x = -0.22;
+          if (chest) chest.rotation.x = -0.32;
+          if (upperChest) upperChest.rotation.x = -0.2;
 
-          // Chin-in-hands pose: elbows propped on duvet, forearms angled UP cradling cheeks/chin
+          // Chin-in-hands pose: elbows resting on duvet, forearms bent up, softly cupped hands under cheeks/chin
           if (leftShoulder && rightShoulder) {
-            leftShoulder.rotation.z = 0.12;
-            rightShoulder.rotation.z = -0.12;
-            leftShoulder.rotation.y = -0.18;
-            rightShoulder.rotation.y = 0.18;
+            leftShoulder.rotation.set(0.12, -0.22, 0.14);
+            rightShoulder.rotation.set(0.12, 0.22, -0.14);
           }
           if (leftUpperArm && rightUpperArm) {
-            // Bring upper arms forward & slightly inward so elbows rest on top of the duvet
-            leftUpperArm.rotation.set(0.32, -1.05, -0.78);
-            rightUpperArm.rotation.set(0.32, 1.05, 0.78);
+            // Elbows resting on the duvet right underneath her cheeks
+            leftUpperArm.rotation.set(-0.76, -0.24, -1.16);
+            rightUpperArm.rotation.set(-0.76, 0.24, 1.16);
           }
           if (leftLowerArm && rightLowerArm) {
-            // Bend elbows sharply UPWARD and inward so hands cradle her cheeks/chin
-            leftLowerArm.rotation.set(0.28, -1.85, 0.58);
-            rightLowerArm.rotation.set(0.28, 1.85, -0.58);
+            // Forearms bent up so wrists/cupped palms sit right UNDER her chin/cheeks (face clearly visible!)
+            leftLowerArm.rotation.set(-0.16, -2.18, 0.22);
+            rightLowerArm.rotation.set(-0.16, 2.18, -0.22);
           }
           if (leftHand && rightHand) {
-            leftHand.rotation.set(0.18, -0.22, 0.35);
-            rightHand.rotation.set(0.18, 0.22, -0.35);
+            leftHand.rotation.set(0.12, 0.28, -0.42);
+            rightHand.rotation.set(0.12, -0.28, 0.42);
+          }
+
+          // Softly curl fingers into cozy cupped hands cradling her cheeks/chin
+          const curlFinger = (side: 'left' | 'right', bone: string, angle: number) => {
+            const node = currentVrm?.humanoid?.getNormalizedBoneNode(
+              `${side}${bone}` as Parameters<NonNullable<VRM['humanoid']>['getNormalizedBoneNode']>[0]
+            );
+            if (node) node.rotation.z = side === 'left' ? -angle : angle;
+          };
+          for (const side of ['left', 'right'] as const) {
+            for (const f of ['Index', 'Middle', 'Ring', 'Little']) {
+              curlFinger(side, `${f}Proximal`, 0.72);
+              curlFinger(side, `${f}Intermediate`, 0.85);
+            }
           }
 
           // Keep legs the exact same — kicked playfully in the air!
@@ -369,17 +381,17 @@ export function StudyRoomScene({
 
           // Head resting gently in hands, glancing toward cursor when moving
           if (neck) {
-            neck.rotation.x = -0.18 - smoothLookY * 0.12;
-            neck.rotation.y = smoothLookX * 0.15;
+            neck.rotation.x = -0.12 - smoothLookY * 0.1;
+            neck.rotation.y = smoothLookX * 0.14;
           }
           if (head) {
-            head.rotation.x = THREE.MathUtils.clamp(-0.1 - smoothLookY * 0.18, -0.45, 0.25);
+            head.rotation.x = THREE.MathUtils.clamp(-0.04 - smoothLookY * 0.15, -0.38, 0.22);
             head.rotation.y = THREE.MathUtils.clamp(
-              Math.sin(elapsed * 0.55) * 0.03 + smoothLookX * 0.22,
-              -0.38,
-              0.38
+              Math.sin(elapsed * 0.55) * 0.025 + smoothLookX * 0.2,
+              -0.34,
+              0.34
             );
-            head.rotation.z = Math.sin(elapsed * 0.7) * 0.025 - smoothLookX * 0.04;
+            head.rotation.z = Math.sin(elapsed * 0.7) * 0.02 - smoothLookX * 0.03;
           }
         } else if (eyeTrackingRef.current && head) {
           head.rotation.y += smoothLookX * 0.2;
