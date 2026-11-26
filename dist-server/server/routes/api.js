@@ -415,6 +415,59 @@ apiRouter.post('/app-usage/categorize', (req, res) => {
     db.prepare('UPDATE app_usage_logs SET category_id = ? WHERE LOWER(app_name) = LOWER(?)').run(category_id, app_name);
     res.json({ ok: true });
 });
+// ─── Mobile (iPhone Shortcuts) App Usage Tracking ─────────────────────────────
+const activeMobileSessions = new Map();
+function logMobileSession(db, appName, startedAtIso, endedAtIso, durationSec, device) {
+    const safeDuration = Math.max(1, Math.min(14400, Math.round(durationSec)));
+    const rule = db
+        .prepare('SELECT category_id FROM app_category_rules WHERE LOWER(app_pattern) = LOWER(?) LIMIT 1')
+        .get(appName);
+    db.prepare(`INSERT INTO app_usage_logs (app_name, window_title, category_id, started_at, ended_at, duration_sec)
+     VALUES (?, ?, ?, ?, ?, ?)`).run(appName, device, rule?.category_id ?? null, startedAtIso, endedAtIso, safeDuration);
+}
+apiRouter.post('/app-usage/mobile-event', (req, res) => {
+    const rawApp = (req.body?.app_name ?? req.query.app ?? req.query.app_name ?? '');
+    const action = (req.body?.action ?? req.query.action ?? 'open').toLowerCase();
+    const device = (req.body?.device ?? req.query.device ?? 'iPhone').trim() || 'iPhone';
+    const explicitDuration = Number(req.body?.duration_sec ?? req.query.duration_sec ?? 0);
+    if (!rawApp.trim()) {
+        return res.status(400).json({ error: 'app_name is required' });
+    }
+    const appName = rawApp.trim().includes(`(${device})`)
+        ? rawApp.trim()
+        : `${rawApp.trim()} (${device})`;
+    const db = getDb();
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    // Direct duration logging (e.g. test ping or manual shortcut)
+    if (explicitDuration > 0) {
+        const startIso = new Date(nowMs - explicitDuration * 1000).toISOString();
+        logMobileSession(db, appName, startIso, nowIso, explicitDuration, device);
+        return res.json({ ok: true, status: 'logged', app_name: appName, duration_sec: explicitDuration });
+    }
+    if (action === 'open' || action === 'start') {
+        const prev = activeMobileSessions.get(device);
+        if (prev) {
+            const dur = Math.floor((nowMs - prev.startedAtMs) / 1000);
+            if (dur >= 2) {
+                logMobileSession(db, prev.appName, prev.startedAtIso, nowIso, dur, device);
+            }
+        }
+        activeMobileSessions.set(device, { appName, startedAtMs: nowMs, startedAtIso: nowIso });
+        return res.json({ ok: true, status: 'started', app_name: appName, device });
+    }
+    if (action === 'close' || action === 'stop') {
+        const prev = activeMobileSessions.get(device);
+        activeMobileSessions.delete(device);
+        if (prev) {
+            const dur = Math.max(1, Math.floor((nowMs - prev.startedAtMs) / 1000));
+            logMobileSession(db, prev.appName, prev.startedAtIso, nowIso, dur, device);
+            return res.json({ ok: true, status: 'logged', app_name: prev.appName, duration_sec: dur });
+        }
+        return res.json({ ok: true, status: 'no_active_session', app_name: appName });
+    }
+    return res.status(400).json({ error: 'action must be "open" or "close"' });
+});
 // ─── History (Past Time Entries & App Usage) ──────────────────────────────────
 apiRouter.get('/history', (req, res) => {
     const days = Math.min(90, Math.max(1, Number(req.query.days) || 14));

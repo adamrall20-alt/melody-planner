@@ -2,9 +2,9 @@ const { app, BrowserWindow, nativeImage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-const APP_URL = isDev ? 'http://localhost:5173' : 'http://localhost:4310';
-const ICON_PATH = path.resolve(__dirname, '..', 'public', 'icon-512.png');
+const isDev = process.env.NODE_ENV === 'development';
+const APP_URL = process.env.MELODY_APP_URL || (isDev ? 'http://localhost:5173' : 'http://localhost:4310');
+const ICON_PATH = path.resolve(__dirname, '..', 'public', 'mac-icon.png');
 
 app.setName('Melody Planner');
 

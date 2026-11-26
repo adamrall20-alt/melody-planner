@@ -1,5 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Cloud, Eye, Moon, Sun, Wifi, RefreshCw, Tag, Plus } from 'lucide-react';
+import {
+  Cloud,
+  Eye,
+  Moon,
+  Sun,
+  Wifi,
+  RefreshCw,
+  Tag,
+  Plus,
+  Smartphone,
+  Copy,
+  Check,
+} from 'lucide-react';
 import type { AppSettings, Category, NetworkInfo, SyncStatus } from '@shared/types';
 import { api } from '@/lib/api';
 
@@ -20,6 +32,37 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [testPingMsg, setTestPingMsg] = useState<string | null>(null);
+
+  const primaryLanUrl = networkInfo?.lanUrls[0] ?? 'http://<your-mac-ip>:4310';
+  const mobileWebhookUrl = `${primaryLanUrl}/api/app-usage/mobile-event`;
+
+  const handleCopyWebhook = async () => {
+    try {
+      await navigator.clipboard.writeText(mobileWebhookUrl);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 1800);
+    } catch {
+      // ignore clipboard errors
+    }
+  };
+
+  const handleTestMobilePing = async () => {
+    try {
+      const res = await fetch('/api/app-usage/mobile-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_name: 'Anki', duration_sec: 60, device: 'iPhone' }),
+      });
+      if (res.ok) {
+        setTestPingMsg('Logged "Anki (iPhone)" (1m) — check Time & Apps!');
+        setTimeout(() => setTestPingMsg(null), 4000);
+      }
+    } catch {
+      setTestPingMsg('Could not reach server.');
+    }
+  };
 
   const loadSync = async () => {
     setRefreshing(true);
@@ -247,6 +290,87 @@ export function SettingsPanel({
             ) : (
               <p className="text-xs text-[var(--text-muted)]">No LAN Wi-Fi address detected.</p>
             )}
+          </div>
+
+          {/* iPhone App Tracking via Apple Shortcuts */}
+          <div className="mt-4 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)]/85 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--pastel-pink)] text-pink-700 dark:text-pink-300">
+                  <Smartphone className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-extrabold text-[var(--text-main)]">
+                    iPhone App Tracking (Apple Shortcuts)
+                  </h4>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    Auto-log iPhone apps into Time &amp; Apps over home Wi-Fi
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleTestMobilePing()}
+                className="rounded-xl bg-[var(--pastel-mint)] px-3 py-1.5 text-[11px] font-extrabold text-[var(--text-main)] transition hover:brightness-95"
+              >
+                Send Test Ping
+              </button>
+            </div>
+
+            {testPingMsg && (
+              <p className="mt-2 rounded-xl bg-[var(--pastel-mint)] px-3 py-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200">
+                {testPingMsg}
+              </p>
+            )}
+
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-[var(--border-card)] bg-[var(--bg-input)] px-3 py-2">
+              <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--text-main)]">
+                {mobileWebhookUrl}
+              </code>
+              <button
+                type="button"
+                onClick={() => void handleCopyWebhook()}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--pastel-sky)] px-2.5 py-1 text-[11px] font-bold text-[var(--text-main)]"
+              >
+                {copiedUrl ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {copiedUrl ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+
+            <ol className="mt-3 space-y-1 text-[11px] leading-relaxed text-[var(--text-muted)] list-decimal pl-4">
+              <li>
+                Open the <strong className="text-[var(--text-main)]">Shortcuts</strong> app on your
+                iPhone → tap <strong className="text-[var(--text-main)]">Automation</strong> →{' '}
+                <strong className="text-[var(--text-main)]">+</strong> →{' '}
+                <strong className="text-[var(--text-main)]">App</strong>.
+              </li>
+              <li>
+                Pick the app (e.g. Anki or Instagram), select{' '}
+                <strong className="text-[var(--text-main)]">Is Opened</strong> and{' '}
+                <strong className="text-[var(--text-main)]">Run Immediately</strong>.
+              </li>
+              <li>
+                Add action <strong className="text-[var(--text-main)]">Get Contents of URL</strong>{' '}
+                → paste the URL above → set Method to{' '}
+                <strong className="text-[var(--text-main)]">POST</strong> → Request Body{' '}
+                <strong className="text-[var(--text-main)]">JSON</strong> with fields:{' '}
+                <code className="rounded bg-[var(--bg-subtle)] px-1 font-mono text-[var(--text-main)]">
+                  app_name: &quot;Anki&quot;
+                </code>{' '}
+                and{' '}
+                <code className="rounded bg-[var(--bg-subtle)] px-1 font-mono text-[var(--text-main)]">
+                  action: &quot;open&quot;
+                </code>
+                .
+              </li>
+              <li>
+                Repeat for <strong className="text-[var(--text-main)]">Is Closed</strong> with{' '}
+                <code className="rounded bg-[var(--bg-subtle)] px-1 font-mono text-[var(--text-main)]">
+                  action: &quot;close&quot;
+                </code>
+                . Sessions appear in <strong className="text-[var(--text-main)]">Time &amp; Apps</strong>!
+              </li>
+            </ol>
           </div>
         </section>
       )}
