@@ -86,7 +86,7 @@ export function StudyRoomScene({
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(34, width / height, 0.1, 30);
-    camera.position.set(1.65, 1.48, 2.05);
+    camera.position.set(1.55, 1.42, 1.98);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
@@ -99,9 +99,9 @@ export function StudyRoomScene({
     container.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 0.72, 0.08);
+    controls.target.set(0, 0.78, 0.12);
     controls.enablePan = false;
-    controls.minDistance = 1.15;
+    controls.minDistance = 1.1;
     controls.maxDistance = 3.5;
     controls.minPolarAngle = Math.PI * 0.18;
     controls.maxPolarAngle = Math.PI * 0.48;
@@ -112,7 +112,7 @@ export function StudyRoomScene({
     controls.update();
 
     // ─── Lights (dynamically tinted by Morning / Golden / Night preset) ───────
-    const ambient = new THREE.AmbientLight(0xfff7ed, 0.85);
+    const ambient = new THREE.AmbientLight(0xfff7ed, 0.88);
     scene.add(ambient);
 
     const sunLight = new THREE.DirectionalLight(0xfff1dc, 1.35);
@@ -121,186 +121,37 @@ export function StudyRoomScene({
     sunLight.shadow.mapSize.set(1024, 1024);
     scene.add(sunLight);
 
-    const lampLight = new THREE.PointLight(0xffd28a, 1.1, 5.5);
-    lampLight.position.set(-1.15, 1.12, -0.82);
+    const lampLight = new THREE.PointLight(0xffd28a, 1.2, 5.5);
+    lampLight.position.set(-1.18, 1.12, -0.88);
     scene.add(lampLight);
 
     const rimLight = new THREE.DirectionalLight(0xbbe6f7, 0.55);
     rimLight.position.set(-2.2, 2.0, -1.6);
     scene.add(rimLight);
 
-    // ─── Cozy Bedroom Geometry ────────────────────────────────────────────────
-    const roomGroup = new THREE.Group();
-    scene.add(roomGroup);
+    // References to dynamic materials inside study-room.glb
+    let lampShadeMat: THREE.MeshStandardMaterial | null = null;
+    let windowSkyMat: THREE.MeshStandardMaterial | null = null;
 
-    // Floor
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0xe6c9a8, roughness: 0.85 });
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.1, 5.0), floorMat);
-    floor.position.set(0, -0.05, 0);
-    floor.receiveShadow = true;
-    roomGroup.add(floor);
-
-    // Soft Pastel Rug
-    const rugMat = new THREE.MeshStandardMaterial({ color: 0xc8f1e1, roughness: 0.95 });
-    const rug = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.45, 0.02, 40), rugMat);
-    rug.position.set(0.15, 0.01, 0.25);
-    rug.receiveShadow = true;
-    roomGroup.add(rug);
-
-    // Back & Left Walls
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0xf6eef5, roughness: 0.92 });
-    const backWall = new THREE.Mesh(new THREE.BoxGeometry(5.4, 3.2, 0.12), wallMat);
-    backWall.position.set(0, 1.55, -1.45);
-    backWall.receiveShadow = true;
-    roomGroup.add(backWall);
-
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.2, 5.0), wallMat);
-    leftWall.position.set(-2.05, 1.55, 0.2);
-    leftWall.receiveShadow = true;
-    roomGroup.add(leftWall);
-
-    // Cozy Window on Back Wall
-    const windowFrameMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
-    const windowFrame = new THREE.Mesh(new THREE.BoxGeometry(1.55, 1.15, 0.08), windowFrameMat);
-    windowFrame.position.set(0.65, 1.85, -1.36);
-    roomGroup.add(windowFrame);
-
-    const skyMat = new THREE.MeshBasicMaterial({ color: 0xbce6fb });
-    const windowGlass = new THREE.Mesh(new THREE.PlaneGeometry(1.38, 0.98), skyMat);
-    windowGlass.position.set(0.65, 1.85, -1.31);
-    roomGroup.add(windowGlass);
-
-    // Window Mullions
-    const mullionV = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.0, 0.04), windowFrameMat);
-    mullionV.position.set(0.65, 1.85, -1.31);
-    roomGroup.add(mullionV);
-    const mullionH = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.05, 0.04), windowFrameMat);
-    mullionH.position.set(0.65, 1.85, -1.31);
-    roomGroup.add(mullionH);
-
-    // ─── Cozy Bed ─────────────────────────────────────────────────────────────
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0xc9966b, roughness: 0.72 });
-    const mattressMat = new THREE.MeshStandardMaterial({ color: 0xfffaf5, roughness: 0.9 });
-    const duvetMat = new THREE.MeshStandardMaterial({ color: 0xfbd5e6, roughness: 0.88 });
-    const pillowMat = new THREE.MeshStandardMaterial({ color: 0xc7eafc, roughness: 0.88 });
-
-    // Bed Frame Base
-    const bedFrame = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.24, 2.25), woodMat);
-    bedFrame.position.set(0, 0.22, -0.08);
-    bedFrame.castShadow = true;
-    bedFrame.receiveShadow = true;
-    roomGroup.add(bedFrame);
-
-    // Bed Headboard
-    const headboard = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.92, 0.1), woodMat);
-    headboard.position.set(0, 0.62, -1.18);
-    headboard.castShadow = true;
-    roomGroup.add(headboard);
-
-    // Bed Legs
-    for (const [lx, lz] of [
-      [-0.74, -1.12],
-      [0.74, -1.12],
-      [-0.74, 0.96],
-      [0.74, 0.96],
-    ]) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.038, 0.14, 12), woodMat);
-      leg.position.set(lx, 0.07, lz);
-      roomGroup.add(leg);
-    }
-
-    // Mattress (top surface at y = 0.54)
-    const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.22, 2.14), mattressMat);
-    mattress.position.set(0, 0.43, -0.08);
-    mattress.receiveShadow = true;
-    roomGroup.add(mattress);
-
-    // Soft Pastel Duvet draped over lower half of bed
-    const duvet = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 1.48), duvetMat);
-    duvet.position.set(0, 0.54, 0.22);
-    duvet.receiveShadow = true;
-    roomGroup.add(duvet);
-
-    // Fluffy Pillows
-    const pillowL = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.16, 0.38), pillowMat);
-    pillowL.position.set(-0.36, 0.62, -0.88);
-    pillowL.rotation.x = 0.22;
-    roomGroup.add(pillowL);
-
-    const pillowR = new THREE.Mesh(
-      new THREE.BoxGeometry(0.62, 0.16, 0.38),
-      new THREE.MeshStandardMaterial({ color: 0xfdebb6, roughness: 0.88 })
-    );
-    pillowR.position.set(0.36, 0.62, -0.88);
-    pillowR.rotation.x = 0.22;
-    roomGroup.add(pillowR);
-
-    // Bedside Nightstand & Warm Lamp
-    const nightstand = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.56, 0.46), woodMat);
-    nightstand.position.set(-1.18, 0.28, -0.88);
-    nightstand.castShadow = true;
-    roomGroup.add(nightstand);
-
-    const lampBase = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.09, 0.24, 16),
-      new THREE.MeshStandardMaterial({ color: 0xfdebb6, roughness: 0.5 })
-    );
-    lampBase.position.set(-1.18, 0.68, -0.88);
-    roomGroup.add(lampBase);
-
-    const lampShadeMat = new THREE.MeshStandardMaterial({
-      color: 0xfff3d6,
-      emissive: 0xffc978,
-      emissiveIntensity: 0.55,
-      roughness: 0.6,
-    });
-    const lampShade = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.19, 0.22, 20), lampShadeMat);
-    lampShade.position.set(-1.18, 0.88, -0.88);
-    roomGroup.add(lampShade);
-
-    // ─── Open Book Prop on Bed (in front of Melody) ───────────────────────────
-    const bookGroup = new THREE.Group();
-    bookGroup.position.set(0.0, 0.585, 0.52);
-    bookGroup.rotation.y = Math.PI; // open facing Melody
-    roomGroup.add(bookGroup);
-
-    const coverMat = new THREE.MeshStandardMaterial({ color: 0x38b2c4, roughness: 0.7 });
-    const pageMat = new THREE.MeshStandardMaterial({ color: 0xfffdf7, roughness: 0.9 });
-
-    const leftCover = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.015, 0.32), coverMat);
-    leftCover.position.set(-0.125, 0.01, 0);
-    leftCover.rotation.z = -0.14;
-    bookGroup.add(leftCover);
-
-    const rightCover = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.015, 0.32), coverMat);
-    rightCover.position.set(0.125, 0.01, 0);
-    rightCover.rotation.z = 0.14;
-    bookGroup.add(rightCover);
-
-    const leftPage = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.018, 0.3), pageMat);
-    leftPage.position.set(-0.115, 0.025, 0);
-    leftPage.rotation.z = -0.14;
-    bookGroup.add(leftPage);
-
-    const rightPage = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.018, 0.3), pageMat);
-    rightPage.position.set(0.115, 0.025, 0);
-    rightPage.rotation.z = 0.14;
-    bookGroup.add(rightPage);
-
-    // Animated Turning Page Pivot
+    // Animated Turning Page Pivot resting on top of the Blender book
     const turnPagePivot = new THREE.Group();
-    turnPagePivot.position.set(0, 0.036, 0);
-    bookGroup.add(turnPagePivot);
-    const turningPage = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.004, 0.29), pageMat);
+    turnPagePivot.position.set(0, 0.625, 0.52);
+    turnPagePivot.rotation.y = Math.PI;
+    scene.add(turnPagePivot);
+    const turningPage = new THREE.Mesh(
+      new THREE.BoxGeometry(0.21, 0.004, 0.29),
+      new THREE.MeshStandardMaterial({ color: 0xfffaf0, roughness: 0.9 })
+    );
     turningPage.position.set(0.105, 0, 0);
+    turningPage.visible = false;
     turnPagePivot.add(turningPage);
 
     // LookAt Target for Eye Tracking
     const lookAtTarget = new THREE.Object3D();
-    lookAtTarget.position.set(0, 0.85, 1.4);
+    lookAtTarget.position.set(0, 0.9, 1.5);
     scene.add(lookAtTarget);
 
-    // ─── Load Melody.vrm & Optional study_bed.vrma ────────────────────────────
+    // ─── Load Blender Textured Bedroom GLB + Melody.vrm ───────────────────────
     let currentVrm: VRM | null = null;
     let mixer: THREE.AnimationMixer | null = null;
     let hasCustomBedAnim = false;
@@ -309,6 +160,32 @@ export function StudyRoomScene({
     loader.register((parser) => new VRMLoaderPlugin(parser));
     loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
 
+    // Load textured Blender bedroom
+    loader.load(
+      '/models/study-room.glb',
+      (roomGltf) => {
+        roomGltf.scene.traverse((obj) => {
+          if ((obj as THREE.Mesh).isMesh) {
+            const mesh = obj as THREE.Mesh;
+            mesh.receiveShadow = true;
+            if (!['Floor', 'BackWall', 'LeftWall', 'Rug', 'WindowGlass'].includes(mesh.name)) {
+              mesh.castShadow = true;
+            }
+            if (mesh.name === 'LampShade' && mesh.material instanceof THREE.MeshStandardMaterial) {
+              lampShadeMat = mesh.material;
+            }
+            if (mesh.name === 'WindowGlass' && mesh.material instanceof THREE.MeshStandardMaterial) {
+              windowSkyMat = mesh.material;
+            }
+          }
+        });
+        scene.add(roomGltf.scene);
+      },
+      undefined,
+      (err) => console.error('Failed to load study-room.glb:', err)
+    );
+
+    // Load Melody.vrm
     loader.load(
       '/models/Melody.vrm',
       async (gltf) => {
@@ -324,12 +201,12 @@ export function StudyRoomScene({
           vrm.lookAt.target = lookAtTarget;
         }
 
-        // Place Melody on top of the cozy bed, facing forward toward the book (+Z)
-        vrm.scene.position.set(0, 0.66, -0.22);
+        // Rest Melody comfortably on top of the quilted duvet (duvet top y ≈ 0.58)
+        vrm.scene.position.set(0, 0.74, -0.22);
         scene.add(vrm.scene);
         currentVrm = vrm;
 
-        // Check for optional custom Blender study_bed.vrma
+        // Optional custom Blender study_bed.vrma override
         try {
           const head = await fetch('/animations/study_bed.vrma', { method: 'HEAD' });
           if (head.ok) {
@@ -345,7 +222,7 @@ export function StudyRoomScene({
             }
           }
         } catch {
-          // Use procedural stomach-down reading pose below
+          // Use procedural stomach-down chin-in-hands pose below
         }
 
         setLoading(false);
@@ -369,38 +246,35 @@ export function StudyRoomScene({
       const delta = clock.getDelta();
       const elapsed = clock.getElapsedTime();
 
-      // Update lighting preset smoothly
+      // Update lighting preset
       const mode = lightingRef.current;
       if (mode === 'morning') {
         ambient.color.setHex(0xfff8f0);
-        ambient.intensity = 0.92;
+        ambient.intensity = 0.95;
         sunLight.color.setHex(0xfff4e0);
         sunLight.intensity = 1.35;
         lampLight.intensity = 0.45;
-        lampShadeMat.emissiveIntensity = 0.25;
-        skyMat.color.setHex(0xbce6fb);
-        wallMat.color.setHex(0xf4f0f7);
+        if (lampShadeMat) lampShadeMat.emissiveIntensity = 0.25;
+        if (windowSkyMat) windowSkyMat.color.setHex(0xbce6fb);
       } else if (mode === 'golden') {
         ambient.color.setHex(0xffdfc2);
-        ambient.intensity = 0.82;
+        ambient.intensity = 0.85;
         sunLight.color.setHex(0xffb470);
         sunLight.intensity = 1.45;
-        lampLight.intensity = 1.15;
-        lampShadeMat.emissiveIntensity = 0.7;
-        skyMat.color.setHex(0xfdba8c);
-        wallMat.color.setHex(0xf7e7dc);
+        lampLight.intensity = 1.25;
+        if (lampShadeMat) lampShadeMat.emissiveIntensity = 0.75;
+        if (windowSkyMat) windowSkyMat.color.setHex(0xfdba8c);
       } else {
         ambient.color.setHex(0x8aa4c8);
-        ambient.intensity = 0.48;
+        ambient.intensity = 0.52;
         sunLight.color.setHex(0x9ec5fe);
-        sunLight.intensity = 0.4;
-        lampLight.intensity = 1.85;
-        lampShadeMat.emissiveIntensity = 1.15;
-        skyMat.color.setHex(0x1e2942);
-        wallMat.color.setHex(0x2c3345);
+        sunLight.intensity = 0.42;
+        lampLight.intensity = 2.1;
+        if (lampShadeMat) lampShadeMat.emissiveIntensity = 1.25;
+        if (windowSkyMat) windowSkyMat.color.setHex(0x1e2942);
       }
 
-      // Subtle page-turn animation every 14 seconds while focusing
+      // Subtle page-turn animation while focusing
       const pageCycle = elapsed % 14;
       if (isFocusingRef.current && pageCycle > 12.6) {
         const t = (pageCycle - 12.6) / 1.4;
@@ -421,7 +295,7 @@ export function StudyRoomScene({
       smoothLookX += (targetX - smoothLookX) * lerpAlpha;
       smoothLookY += (targetY - smoothLookY) * lerpAlpha;
 
-      lookAtTarget.position.set(smoothLookX * 1.3, 0.86 + smoothLookY * 0.75, 1.65);
+      lookAtTarget.position.set(smoothLookX * 1.3, 0.92 + smoothLookY * 0.75, 1.7);
 
       if (currentVrm) {
         const isCeleb = celebratingRef.current;
@@ -429,15 +303,18 @@ export function StudyRoomScene({
         const neck = currentVrm.humanoid?.getNormalizedBoneNode('neck');
 
         if (!hasCustomBedAnim) {
-          // Stomach-down on bed, propped up on elbows, legs kicked playfully in the air!
           const hips = currentVrm.humanoid?.getNormalizedBoneNode('hips');
           const spine = currentVrm.humanoid?.getNormalizedBoneNode('spine');
           const chest = currentVrm.humanoid?.getNormalizedBoneNode('chest');
           const upperChest = currentVrm.humanoid?.getNormalizedBoneNode('upperChest');
+          const leftShoulder = currentVrm.humanoid?.getNormalizedBoneNode('leftShoulder');
+          const rightShoulder = currentVrm.humanoid?.getNormalizedBoneNode('rightShoulder');
           const leftUpperArm = currentVrm.humanoid?.getNormalizedBoneNode('leftUpperArm');
           const rightUpperArm = currentVrm.humanoid?.getNormalizedBoneNode('rightUpperArm');
           const leftLowerArm = currentVrm.humanoid?.getNormalizedBoneNode('leftLowerArm');
           const rightLowerArm = currentVrm.humanoid?.getNormalizedBoneNode('rightLowerArm');
+          const leftHand = currentVrm.humanoid?.getNormalizedBoneNode('leftHand');
+          const rightHand = currentVrm.humanoid?.getNormalizedBoneNode('rightHand');
           const leftUpperLeg = currentVrm.humanoid?.getNormalizedBoneNode('leftUpperLeg');
           const rightUpperLeg = currentVrm.humanoid?.getNormalizedBoneNode('rightUpperLeg');
           const leftLowerLeg = currentVrm.humanoid?.getNormalizedBoneNode('leftLowerLeg');
@@ -445,38 +322,38 @@ export function StudyRoomScene({
 
           if (hips) {
             hips.position.y = -0.02;
-            hips.rotation.x = 1.46; // Lay stomach-down along the bed
+            hips.rotation.x = 1.44;
             hips.rotation.y = 0;
-            hips.rotation.z = Math.sin(elapsed * 0.9) * 0.02;
+            hips.rotation.z = Math.sin(elapsed * 0.9) * 0.015;
           }
-          // Arch upper body gently up off the mattress toward the book
-          if (spine) {
-            spine.rotation.x = -0.34 + Math.sin(elapsed * 1.5) * 0.018;
-          }
-          if (chest) {
-            chest.rotation.x = -0.32;
-          }
-          if (upperChest) {
-            upperChest.rotation.x = -0.2;
-          }
+          // Arch upper torso comfortably above the duvet
+          if (spine) spine.rotation.x = -0.34 + Math.sin(elapsed * 1.5) * 0.015;
+          if (chest) chest.rotation.x = -0.34;
+          if (upperChest) upperChest.rotation.x = -0.22;
 
-          // Elbows propped on mattress, hands resting near cheeks / book
+          // Chin-in-hands pose: elbows propped on duvet, forearms angled UP cradling cheeks/chin
+          if (leftShoulder && rightShoulder) {
+            leftShoulder.rotation.z = 0.12;
+            rightShoulder.rotation.z = -0.12;
+            leftShoulder.rotation.y = -0.18;
+            rightShoulder.rotation.y = 0.18;
+          }
           if (leftUpperArm && rightUpperArm) {
-            leftUpperArm.rotation.z = -1.05;
-            rightUpperArm.rotation.z = 1.05;
-            leftUpperArm.rotation.x = -0.68;
-            rightUpperArm.rotation.x = -0.68;
-            leftUpperArm.rotation.y = 0.25;
-            rightUpperArm.rotation.y = -0.25;
+            // Bring upper arms forward & slightly inward so elbows rest on top of the duvet
+            leftUpperArm.rotation.set(0.32, -1.05, -0.78);
+            rightUpperArm.rotation.set(0.32, 1.05, 0.78);
           }
           if (leftLowerArm && rightLowerArm) {
-            leftLowerArm.rotation.x = -1.15;
-            rightLowerArm.rotation.x = -1.15;
-            leftLowerArm.rotation.z = -0.28;
-            rightLowerArm.rotation.z = 0.28;
+            // Bend elbows sharply UPWARD and inward so hands cradle her cheeks/chin
+            leftLowerArm.rotation.set(0.28, -1.85, 0.58);
+            rightLowerArm.rotation.set(0.28, 1.85, -0.58);
+          }
+          if (leftHand && rightHand) {
+            leftHand.rotation.set(0.18, -0.22, 0.35);
+            rightHand.rotation.set(0.18, 0.22, -0.35);
           }
 
-          // Legs kicked up in the air with alternating playful kicks!
+          // Keep legs the exact same — kicked playfully in the air!
           const kickSpeed = isCeleb ? 5.2 : 1.7;
           const kickAmp = isCeleb ? 0.34 : 0.22;
           if (leftUpperLeg && rightUpperLeg) {
@@ -490,19 +367,19 @@ export function StudyRoomScene({
             rightLowerLeg.rotation.x = 1.48 + Math.sin(elapsed * kickSpeed + 2.1) * kickAmp;
           }
 
-          // Head looks slightly down at book, glancing up toward cursor when moving
+          // Head resting gently in hands, glancing toward cursor when moving
           if (neck) {
-            neck.rotation.x = -0.25 - smoothLookY * 0.14;
-            neck.rotation.y = smoothLookX * 0.18;
+            neck.rotation.x = -0.18 - smoothLookY * 0.12;
+            neck.rotation.y = smoothLookX * 0.15;
           }
           if (head) {
-            head.rotation.x = THREE.MathUtils.clamp(-0.18 - smoothLookY * 0.22, -0.55, 0.25);
+            head.rotation.x = THREE.MathUtils.clamp(-0.1 - smoothLookY * 0.18, -0.45, 0.25);
             head.rotation.y = THREE.MathUtils.clamp(
-              Math.sin(elapsed * 0.55) * 0.04 + smoothLookX * 0.28,
-              -0.45,
-              0.45
+              Math.sin(elapsed * 0.55) * 0.03 + smoothLookX * 0.22,
+              -0.38,
+              0.38
             );
-            head.rotation.z = Math.sin(elapsed * 0.7) * 0.03 - smoothLookX * 0.05;
+            head.rotation.z = Math.sin(elapsed * 0.7) * 0.025 - smoothLookX * 0.04;
           }
         } else if (eyeTrackingRef.current && head) {
           head.rotation.y += smoothLookX * 0.2;
@@ -521,7 +398,7 @@ export function StudyRoomScene({
           }
         }
         currentVrm.expressionManager?.setValue('blink', blinkVal);
-        currentVrm.expressionManager?.setValue('happy', isCeleb ? 0.9 : 0.22);
+        currentVrm.expressionManager?.setValue('happy', isCeleb ? 0.9 : 0.25);
         currentVrm.expressionManager?.setValue('relaxed', isFocusingRef.current ? 0.35 : 0.2);
 
         currentVrm.update(delta);

@@ -294,13 +294,15 @@ export function MelodyCompanion({
           const isFocus = currentMood === 'focus';
           const isRelax = currentMood === 'relax';
 
-          // Subtle lively weight shift & celebrate happy bounce
+          // Subtle lively weight shift & celebrate happy bounce (never overwrite hips.position.y!)
+          currentVrm.scene.position.y = isCelebrate
+            ? Math.abs(Math.sin(elapsed * 8)) * 0.045
+            : 0;
           if (hips) {
             hips.rotation.z = isCelebrate
               ? Math.sin(elapsed * 7.5) * 0.045
               : Math.sin(elapsed * 0.65) * 0.025;
             hips.rotation.y = Math.sin(elapsed * 0.45) * 0.04;
-            hips.position.y = isCelebrate ? Math.abs(Math.sin(elapsed * 8)) * 0.045 : 0;
           }
 
           if (spine) {
