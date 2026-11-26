@@ -1,0 +1,209 @@
+import { useEffect, useState } from 'react';
+import { Cloud, Eye, Moon, Sun, Wifi, RefreshCw } from 'lucide-react';
+import type { AppSettings, NetworkInfo, SyncStatus } from '@shared/types';
+import { api } from '@/lib/api';
+
+interface SettingsPanelProps {
+  settings: AppSettings;
+  networkInfo: NetworkInfo | null;
+  onUpdateSettings: (patch: Partial<AppSettings>) => void;
+}
+
+export function SettingsPanel({
+  settings,
+  networkInfo,
+  onUpdateSettings,
+}: SettingsPanelProps) {
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadSync = async () => {
+    setRefreshing(true);
+    try {
+      const data = await api.getSyncStatus();
+      setSyncStatus(data);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadSync();
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      {/* Appearance / Theme */}
+      <section className="cozy-card rounded-3xl p-5">
+        <h2 className="text-base font-bold text-[var(--text-main)]">Appearance</h2>
+        <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+          Switch between Playful Pastel and Cozy Dark anytime for sore eyes.
+        </p>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => onUpdateSettings({ theme: 'pastel' })}
+            className={`flex items-center gap-3 rounded-2xl border-2 p-3.5 text-left transition ${
+              settings.theme === 'pastel'
+                ? 'border-[var(--accent)] bg-[var(--pastel-sky)]'
+                : 'border-[var(--border-card)] bg-[var(--bg-subtle)]'
+            }`}
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-amber-500 shadow-sm">
+              <Sun className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[var(--text-main)]">Playful Pastel</p>
+              <p className="text-[11px] text-[var(--text-muted)]">Airy mint, sky & butter</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onUpdateSettings({ theme: 'dark' })}
+            className={`flex items-center gap-3 rounded-2xl border-2 p-3.5 text-left transition ${
+              settings.theme === 'dark'
+                ? 'border-[var(--accent)] bg-[var(--pastel-sky)]'
+                : 'border-[var(--border-card)] bg-[var(--bg-subtle)]'
+            }`}
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-sky-300 shadow-sm">
+              <Moon className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[var(--text-main)]">Cozy Dark</p>
+              <p className="text-[11px] text-[var(--text-muted)]">Gentle on tired eyes</p>
+            </div>
+          </button>
+        </div>
+      </section>
+
+      {/* Companion Settings */}
+      <section className="cozy-card rounded-3xl p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--pastel-mint)] text-emerald-700 dark:text-emerald-300">
+              <Eye className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[var(--text-main)]">
+                Melody Cursor Tracking
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                Melody&apos;s eyes and head gently follow your cursor.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onUpdateSettings({ eye_tracking: !settings.eye_tracking })}
+            className={`relative h-7 w-12 rounded-full transition ${
+              settings.eye_tracking ? 'bg-[var(--accent)]' : 'bg-slate-400/40'
+            }`}
+          >
+            <span
+              className={`absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                settings.eye_tracking ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+      </section>
+
+      {/* Google Drive Sync Status */}
+      <section className="cozy-card rounded-3xl p-5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--pastel-butter)] text-amber-700 dark:text-amber-300">
+              <Cloud className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[var(--text-main)]">
+                Google Drive Sync Folder
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                Everything (timers, study, journal, memories, images, voice memos & settings) is
+                stored here.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadSync()}
+            className="rounded-xl bg-[var(--bg-subtle)] p-2 text-[var(--text-muted)] hover:text-[var(--text-main)]"
+            title="Refresh sync stats"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {syncStatus && (
+          <div className="mt-4 space-y-3">
+            <div className="rounded-2xl bg-[var(--bg-subtle)] px-3.5 py-2.5 font-mono text-xs text-[var(--text-main)] break-all">
+              {syncStatus.dataDir}
+              <span className="ml-2 text-[var(--text-muted)]">({syncStatus.dbSizeKb} KB DB)</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { label: 'Timers & Study', val: syncStatus.counts.timeEntries, bg: 'var(--pastel-sky)' },
+                { label: 'App Logs', val: syncStatus.counts.appLogs, bg: 'var(--pastel-mint)' },
+                { label: 'Tasks', val: syncStatus.counts.tasks, bg: 'var(--pastel-butter)' },
+                { label: 'Routines', val: syncStatus.counts.routines, bg: 'var(--pastel-peach)' },
+                { label: 'Journals', val: syncStatus.counts.journals, bg: 'var(--pastel-mint)' },
+                { label: 'Memories', val: syncStatus.counts.memories, bg: 'var(--pastel-butter)' },
+                { label: 'Photos', val: syncStatus.counts.images, bg: 'var(--pastel-sky)' },
+                { label: 'Voice Memos', val: syncStatus.counts.voiceMemos, bg: 'var(--pastel-peach)' },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-2xl p-3"
+                  style={{ background: stat.bg }}
+                >
+                  <p className="text-[11px] font-medium text-[var(--text-muted)]">{stat.label}</p>
+                  <p className="mt-0.5 font-mono text-lg font-bold text-[var(--text-main)]">
+                    {stat.val}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Mobile Wi-Fi Access */}
+      {networkInfo && (
+        <section className="cozy-card rounded-3xl p-5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--pastel-sky)] text-sky-700 dark:text-sky-300">
+              <Wifi className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[var(--text-main)]">
+                Connect from Phone / Tablet
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                Open on any device on the same Wi-Fi network:
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 space-y-1.5">
+            {networkInfo.lanUrls.length > 0 ? (
+              networkInfo.lanUrls.map((url) => (
+                <div
+                  key={url}
+                  className="rounded-2xl bg-[var(--bg-subtle)] px-3.5 py-2 font-mono text-xs font-semibold text-[var(--text-main)]"
+                >
+                  {url}
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-[var(--text-muted)]">No LAN Wi-Fi address detected.</p>
+            )}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
