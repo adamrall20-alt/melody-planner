@@ -5,6 +5,7 @@ import path from 'node:path';
 import multer from 'multer';
 import { getDataDir, getDb, getMediaDir } from '../db/database.js';
 import { activeWindowTracker } from '../tracker/activeWindow.js';
+import { buildTasksIcs, parseIcsEvents } from '../calendar/ics.js';
 export const apiRouter = Router();
 const storage = multer.diskStorage({
     destination: (req, _file, cb) => {
@@ -864,6 +865,7 @@ apiRouter.get('/settings', (_req, res) => {
         theme: map.get('theme') === 'dark' ? 'dark' : 'pastel',
         eye_tracking: map.get('eye_tracking') !== 'false',
         study_notes: map.get('study_notes') ?? '',
+        gcal_ics_url: map.get('gcal_ics_url') ?? '',
     });
 });
 apiRouter.patch('/settings', (req, res) => {
@@ -878,12 +880,134 @@ apiRouter.patch('/settings', (req, res) => {
     if (typeof req.body.study_notes === 'string') {
         upsert.run('study_notes', req.body.study_notes);
     }
+    if (typeof req.body.gcal_ics_url === 'string') {
+        upsert.run('gcal_ics_url', req.body.gcal_ics_url.trim());
+        gcalCache = null;
+    }
     const rows = db.prepare('SELECT key, value FROM app_settings').all();
     const map = new Map(rows.map((r) => [r.key, r.value]));
     res.json({
         theme: map.get('theme') === 'dark' ? 'dark' : 'pastel',
         eye_tracking: map.get('eye_tracking') !== 'false',
         study_notes: map.get('study_notes') ?? '',
+        gcal_ics_url: map.get('gcal_ics_url') ?? '',
+    });
+});
+// ─── Google Calendar (.ics) Sync & Export ─────────────────────────────────────
+let gcalCache = null;
+apiRouter.get('/calendar/google-events', async (req, res) => {
+    const { from, to, refresh } = req.query;
+    const db = getDb();
+    const row = db
+        .prepare("SELECT value FROM app_settings WHERE key = 'gcal_ics_url'")
+        .get();
+    const url = row?.value?.trim();
+    if (!url) {
+        return res.json({ connected: false, events: [] });
+    }
+    try {
+        const now = Date.now();
+        let raw = '';
+        if (refresh !== '1' &&
+            gcalCache &&
+            gcalCache.url === url &&
+            now - gcalCache.fetchedAt < 5 * 60 * 1000) {
+            raw = gcalCache.raw;
+        }
+        else {
+            const response = await fetch(url);
+            if (!response.ok) {
+                return res.status(502).json({
+                    connected: true,
+                    error: `Google Calendar feed returned ${response.status}`,
+                    events: [],
+                });
+            }
+            raw = await response.text();
+            gcalCache = { url, raw, fetchedAt: now };
+        }
+        const events = parseIcsEvents(raw, from, to);
+        res.json({ connected: true, events });
+    }
+    catch (err) {
+        res.status(502).json({
+            connected: true,
+            error: err instanceof Error ? err.message : 'Failed to fetch Google Calendar',
+            events: [],
+        });
+    }
+});
+apiRouter.get('/calendar/export.ics', (_req, res) => {
+    const db = getDb();
+    const tasks = db
+        .prepare('SELECT id, title, notes, due_date, scheduled_start FROM tasks ORDER BY due_date ASC')
+        .all();
+    const ics = buildTasksIcs(tasks);
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="melody-planner.ics"');
+    res.send(ics);
+});
+// ─── Google Drive Backup Snapshot + Readable Markdown Exports ─────────────────
+apiRouter.post('/sync/backup', (_req, res) => {
+    const db = getDb();
+    const dataDir = getDataDir();
+    const dbPath = path.join(dataDir, 'melody.db');
+    const backupDir = path.join(dataDir, 'backups');
+    const exportDir = path.join(dataDir, 'exports');
+    const journalsDir = path.join(exportDir, 'journals');
+    const notesDir = path.join(exportDir, 'study-notes');
+    fs.mkdirSync(backupDir, { recursive: true });
+    fs.mkdirSync(journalsDir, { recursive: true });
+    fs.mkdirSync(notesDir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
+    const backupName = `melody-${stamp}.db`;
+    const backupPath = path.join(backupDir, backupName);
+    fs.copyFileSync(dbPath, backupPath);
+    // Keep latest 10 snapshots
+    const existingBackups = fs
+        .readdirSync(backupDir)
+        .filter((f) => f.endsWith('.db'))
+        .sort()
+        .reverse();
+    for (const oldFile of existingBackups.slice(10)) {
+        try {
+            fs.unlinkSync(path.join(backupDir, oldFile));
+        }
+        catch {
+            // ignore
+        }
+    }
+    // Export readable Markdown journals & study notes into Drive/exports/
+    const journals = db.prepare('SELECT * FROM journal_entries ORDER BY entry_date DESC').all();
+    for (const j of journals) {
+        const md = [
+            `# ${j.title || `Journal — ${j.entry_date}`}`,
+            `Date: ${j.entry_date} | Mood: ${j.mood_rating}/5`,
+            '',
+            j.reflection_learned ? `## Learned Something New\n${j.reflection_learned}\n` : '',
+            j.reflection_challenge ? `## Challenged Myself\n${j.reflection_challenge}\n` : '',
+            j.reflection_gratitude ? `## Highlight / Reflection\n${j.reflection_gratitude}\n` : '',
+            j.content ? `## Notes\n${j.content}\n` : '',
+        ]
+            .filter(Boolean)
+            .join('\n');
+        fs.writeFileSync(path.join(journalsDir, `${j.entry_date}.md`), md, 'utf8');
+    }
+    const notes = db.prepare('SELECT * FROM study_notes ORDER BY id ASC').all();
+    for (const n of notes) {
+        const safeFolder = (n.folder || 'General').replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'General';
+        const safeTitle = (n.title || `note-${n.id}`).replace(/[^a-zA-Z0-9 _-]/g, '').trim() || `note-${n.id}`;
+        const folderPath = path.join(notesDir, safeFolder);
+        fs.mkdirSync(folderPath, { recursive: true });
+        fs.writeFileSync(path.join(folderPath, `${safeTitle}.md`), n.content || '', 'utf8');
+    }
+    res.json({
+        ok: true,
+        backupFile: backupName,
+        exportedJournals: journals.length,
+        exportedNotes: notes.length,
+        backupDir,
+        exportDir,
     });
 });
 apiRouter.get('/sync-status', (_req, res) => {

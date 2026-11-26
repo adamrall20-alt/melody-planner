@@ -48,3 +48,4 @@ melody-planner/
 2. **Phase 2:** Journal, Memory Bank, End-of-Day Reflection, local image storage & voice memo recording.
 3. **Phase 3:** XP / Level-Up system, Streaks, Daily Quests, Study Sessions (Obsidian-style markdown notes + focus timer + ambient audio).
 4. **Phase 4:** Google Drive backup & cross-device sync (macOS ↔ Windows), Google Calendar sync, 3D room customization.
+4. **Phase 4:** Animations and Blender.

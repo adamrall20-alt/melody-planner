@@ -137,6 +137,18 @@ export interface AppSettings {
   theme: AppTheme;
   eye_tracking: boolean;
   study_notes: string;
+  gcal_ics_url?: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  start_time: string | null; // HH:mm
+  end_time: string | null; // HH:mm
+  all_day: boolean;
+  location?: string;
+  source: 'google';
 }
 
 export interface SyncStatus {

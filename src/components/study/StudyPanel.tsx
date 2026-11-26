@@ -21,15 +21,19 @@ import {
   Edit3,
   Columns2,
 } from 'lucide-react';
-import type { Category, StudyNote, TimeEntry } from '@shared/types';
+import type { AppTheme, Category, StudyNote, TimeEntry } from '@shared/types';
 import { api } from '@/lib/api';
 import { formatClock, formatDuration } from '@/lib/date';
 import { ambientAudio, type AmbientTrackId } from '@/lib/ambientAudio';
 import { MarkdownPreview } from '@/components/study/MarkdownPreview';
+import { StudyRoomScene } from '@/components/study/StudyRoomScene';
 
 interface StudyPanelProps {
   categories: Category[];
   runningEntry: TimeEntry | null;
+  theme: AppTheme;
+  eyeTracking: boolean;
+  celebrating: boolean;
   onEntriesChanged: () => void;
   onCelebrate: () => void;
   onOpenCategoryManager: () => void;
@@ -59,6 +63,9 @@ const AMBIENT_TRACKS: {
 export function StudyPanel({
   categories,
   runningEntry,
+  theme,
+  eyeTracking,
+  celebrating,
   onEntriesChanged,
   onCelebrate,
   onOpenCategoryManager,
@@ -300,9 +307,22 @@ export function StudyPanel({
   }, {});
 
   return (
-    <div className="space-y-4">
-      {/* Focus Timer + Ambient Audio */}
-      <section className="cozy-card cozy-card-mint rounded-3xl p-5 sm:p-6">
+    <div className="grid gap-4 lg:h-full lg:grid-cols-2">
+      {/* Left 50%: 3D Cozy Study Room with Melody reading on bed */}
+      <div className="min-h-0">
+        <StudyRoomScene
+          theme={theme}
+          eyeTracking={eyeTracking}
+          isFocusing={isRunning && phase === 'focus'}
+          celebrating={celebrating}
+          topicLabel={topic || noteTitle || runningEntry?.title}
+        />
+      </div>
+
+      {/* Right 50%: Focus Timer, Ambient Audio & Obsidian-Style Markdown Study Notes */}
+      <div className="min-h-0 space-y-4 lg:overflow-y-auto lg:pr-0.5">
+        {/* Focus Timer + Ambient Audio */}
+        <section className="cozy-card cozy-card-mint rounded-3xl p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--pastel-mint)] text-emerald-700 dark:text-emerald-300">
@@ -663,6 +683,7 @@ export function StudyPanel({
           </div>
         </div>
       </section>
+      </div>
     </div>
   );
 }

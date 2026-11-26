@@ -170,6 +170,14 @@ export function MelodyCompanion({
 
     const preloadVrmaAnimations = async (vrm: VRM) => {
       mixer = new THREE.AnimationMixer(vrm.scene);
+      mixer.addEventListener('finished', (e) => {
+        const finishedAction = (e as { action?: THREE.AnimationAction }).action;
+        if (finishedAction && finishedAction === actionsByMood.get('celebrate')) {
+          const fallbackMood: CompanionMood = moodRef.current === 'celebrate' ? 'idle' : moodRef.current;
+          playMoodAnimation(fallbackMood);
+        }
+      });
+
       const moods: CompanionMood[] = ['idle', 'focus', 'relax', 'celebrate'];
 
       await Promise.all(
@@ -183,7 +191,12 @@ export function MelodyCompanion({
             if (!vrmAnimations || vrmAnimations.length === 0 || !mixer) return;
             const clip = createVRMAnimationClip(vrmAnimations[0], vrm);
             const action = mixer.clipAction(clip);
-            action.loop = THREE.LoopRepeat;
+            if (m === 'celebrate') {
+              action.loop = THREE.LoopOnce;
+              action.clampWhenFinished = true;
+            } else {
+              action.loop = THREE.LoopRepeat;
+            }
             actionsByMood.set(m, action);
           } catch {
             // Optional animation file not present; procedural idle handles it
@@ -269,42 +282,96 @@ export function MelodyCompanion({
         const neck = currentVrm.humanoid?.getNormalizedBoneNode('neck');
 
         if (!activeAction) {
+          const hips = currentVrm.humanoid?.getNormalizedBoneNode('hips');
           const spine = currentVrm.humanoid?.getNormalizedBoneNode('spine');
+          const chest = currentVrm.humanoid?.getNormalizedBoneNode('chest');
           const leftUpperArm = currentVrm.humanoid?.getNormalizedBoneNode('leftUpperArm');
           const rightUpperArm = currentVrm.humanoid?.getNormalizedBoneNode('rightUpperArm');
+          const leftLowerArm = currentVrm.humanoid?.getNormalizedBoneNode('leftLowerArm');
+          const rightLowerArm = currentVrm.humanoid?.getNormalizedBoneNode('rightLowerArm');
+
+          const isCelebrate = currentMood === 'celebrate';
+          const isFocus = currentMood === 'focus';
+          const isRelax = currentMood === 'relax';
+
+          // Subtle lively weight shift & celebrate happy bounce
+          if (hips) {
+            hips.rotation.z = isCelebrate
+              ? Math.sin(elapsed * 7.5) * 0.045
+              : Math.sin(elapsed * 0.65) * 0.025;
+            hips.rotation.y = Math.sin(elapsed * 0.45) * 0.04;
+            hips.position.y = isCelebrate ? Math.abs(Math.sin(elapsed * 8)) * 0.045 : 0;
+          }
 
           if (spine) {
             spine.rotation.x =
-              Math.sin(elapsed * 1.6) * 0.018 + (currentMood === 'focus' ? 0.045 : 0);
-            spine.rotation.y = Math.sin(elapsed * 0.7) * 0.025 + smoothLookX * 0.05;
+              Math.sin(elapsed * 1.55) * 0.022 + (isFocus ? 0.05 : isCelebrate ? -0.04 : 0);
+            spine.rotation.y = Math.sin(elapsed * 0.6) * 0.035 + smoothLookX * 0.06;
+            spine.rotation.z = Math.sin(elapsed * 0.75) * 0.02;
+          }
+          if (chest) {
+            chest.rotation.x = Math.sin(elapsed * 1.55 + 0.4) * 0.015;
           }
           if (neck) {
-            neck.rotation.y = smoothLookX * 0.16;
-            neck.rotation.x = -smoothLookY * 0.1;
+            const trackWeight = isCelebrate ? 0.35 : 1.0;
+            neck.rotation.y = smoothLookX * 0.16 * trackWeight;
+            neck.rotation.x = -smoothLookY * 0.1 * trackWeight;
           }
           if (head) {
-            const idleYaw = Math.sin(elapsed * 0.85) * 0.03;
-            const idlePitch = currentMood === 'focus' ? 0.06 : Math.sin(elapsed * 1.1) * 0.015;
-            head.rotation.y = THREE.MathUtils.clamp(idleYaw + smoothLookX * 0.28, -0.42, 0.42);
-            head.rotation.x = THREE.MathUtils.clamp(idlePitch - smoothLookY * 0.2, -0.28, 0.28);
+            const trackWeight = isCelebrate ? 0.35 : 1.0;
+            const idleYaw = Math.sin(elapsed * 0.75) * 0.045;
+            const idlePitch = isFocus
+              ? 0.06
+              : isCelebrate
+                ? Math.sin(elapsed * 8) * 0.06
+                : Math.sin(elapsed * 1.05) * 0.022;
+            const curiousTilt = Math.sin(elapsed * 0.42) * 0.05;
+            head.rotation.y = THREE.MathUtils.clamp(
+              idleYaw + smoothLookX * 0.28 * trackWeight,
+              -0.44,
+              0.44
+            );
+            head.rotation.x = THREE.MathUtils.clamp(
+              idlePitch - smoothLookY * 0.2 * trackWeight,
+              -0.3,
+              0.3
+            );
             head.rotation.z =
-              Math.sin(elapsed * 0.55) * 0.025 +
-              (currentMood === 'relax' ? 0.05 : 0) -
-              smoothLookX * 0.06;
+              curiousTilt + (isRelax ? 0.06 : 0) - smoothLookX * 0.06 * trackWeight;
           }
           if (leftUpperArm && rightUpperArm) {
-            const armBase = currentMood === 'celebrate' ? -0.35 : -1.15;
-            const wave =
-              currentMood === 'celebrate'
-                ? Math.sin(elapsed * 6) * 0.18
-                : Math.sin(elapsed * 1.4) * 0.025;
+            const armBase = isCelebrate ? -0.25 : -1.12;
+            const wave = isCelebrate
+              ? Math.sin(elapsed * 7.5) * 0.24
+              : Math.sin(elapsed * 1.3) * 0.045;
             leftUpperArm.rotation.z = armBase + wave;
             rightUpperArm.rotation.z = -armBase - wave;
+            leftUpperArm.rotation.x = isCelebrate ? -0.35 : Math.sin(elapsed * 0.9) * 0.05;
+            rightUpperArm.rotation.x = isCelebrate ? -0.35 : -Math.sin(elapsed * 0.9) * 0.05;
           }
-        } else if (eyeTrackingRef.current && head) {
-          // Subtle additive head glance even during custom .vrma animations
-          head.rotation.y += smoothLookX * 0.2;
-          head.rotation.x -= smoothLookY * 0.12;
+          if (leftLowerArm && rightLowerArm) {
+            leftLowerArm.rotation.z = isCelebrate ? -0.55 + Math.sin(elapsed * 9) * 0.18 : -0.18;
+            rightLowerArm.rotation.z = isCelebrate ? 0.55 - Math.sin(elapsed * 9) * 0.18 : 0.18;
+          }
+        } else if (eyeTrackingRef.current) {
+          // Smooth additive head & neck glance on top of custom .vrma animations
+          const trackWeight = currentMood === 'celebrate' ? 0.3 : 1.0;
+          if (neck) {
+            neck.rotation.y += smoothLookX * 0.12 * trackWeight;
+            neck.rotation.x -= smoothLookY * 0.07 * trackWeight;
+          }
+          if (head) {
+            head.rotation.y = THREE.MathUtils.clamp(
+              head.rotation.y + smoothLookX * 0.22 * trackWeight,
+              -0.55,
+              0.55
+            );
+            head.rotation.x = THREE.MathUtils.clamp(
+              head.rotation.x - smoothLookY * 0.14 * trackWeight,
+              -0.35,
+              0.35
+            );
+          }
         }
 
         // Natural blinking & facial expressions

@@ -3,6 +3,7 @@ import type {
   AppSettings,
   AppUsageLog,
   AppUsageSummary,
+  CalendarEvent,
   Category,
   GamificationState,
   HistoryDaySummary,
@@ -217,4 +218,17 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getSyncStatus: () => request<SyncStatus>('/api/sync-status'),
+  createBackupSnapshot: () =>
+    request<{
+      ok: boolean;
+      backupFile: string;
+      exportedJournals: number;
+      exportedNotes: number;
+      backupDir: string;
+      exportDir: string;
+    }>('/api/sync/backup', { method: 'POST' }),
+  getGoogleCalendarEvents: (from: string, to: string, refresh = false) =>
+    request<{ connected: boolean; events: CalendarEvent[]; error?: string }>(
+      `/api/calendar/google-events?from=${from}&to=${to}${refresh ? '&refresh=1' : ''}`
+    ),
 };

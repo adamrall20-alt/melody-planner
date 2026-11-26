@@ -243,18 +243,24 @@ export function App() {
         </div>
       </header>
 
-      {/* Main Split Workspace: Melody on the LEFT + Content on the RIGHT */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-3 pb-24 md:p-4 md:pb-4 lg:grid-cols-[340px_1fr]">
-        {/* Persistent 3D Companion on the LEFT */}
-        <div className="hidden min-h-0 lg:block">
-          <MelodyCompanion
-            mood={mood}
-            onMoodChange={setMood}
-            activeActivityLabel={runningEntry?.title ?? null}
-            theme={settings.theme}
-            eyeTracking={settings.eye_tracking}
-          />
-        </div>
+      {/* Main Split Workspace: Melody on the LEFT + Content on the RIGHT (Study uses full-width 50/50 room split) */}
+      <div
+        className={`grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-3 pb-24 md:p-4 md:pb-4 ${
+          activeTab === 'study' ? '' : 'lg:grid-cols-[340px_1fr]'
+        }`}
+      >
+        {/* Persistent 3D Companion on the LEFT (hidden on Study tab where the 50/50 3D Study Room takes over) */}
+        {activeTab !== 'study' && (
+          <div className="hidden min-h-0 lg:block">
+            <MelodyCompanion
+              mood={mood}
+              onMoodChange={setMood}
+              activeActivityLabel={runningEntry?.title ?? null}
+              theme={settings.theme}
+              eyeTracking={settings.eye_tracking}
+            />
+          </div>
+        )}
 
         <main className="min-h-0 overflow-y-auto pr-0.5">
           {activeTab === 'today' && (
@@ -287,6 +293,9 @@ export function App() {
             <StudyPanel
               categories={categories}
               runningEntry={runningEntry}
+              theme={settings.theme}
+              eyeTracking={settings.eye_tracking}
+              celebrating={mood === 'celebrate'}
               onEntriesChanged={() => void loadAll()}
               onCelebrate={triggerCelebrate}
               onOpenCategoryManager={() => setCategoryModalOpen(true)}

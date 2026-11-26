@@ -34,6 +34,34 @@ export function SettingsPanel({
   const [refreshing, setRefreshing] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [testPingMsg, setTestPingMsg] = useState<string | null>(null);
+  const [backupMsg, setBackupMsg] = useState<string | null>(null);
+  const [backingUp, setBackingUp] = useState(false);
+  const [gcalUrl, setGcalUrl] = useState(settings.gcal_ics_url ?? '');
+  const [gcalSaved, setGcalSaved] = useState(false);
+
+  useEffect(() => {
+    setGcalUrl(settings.gcal_ics_url ?? '');
+  }, [settings.gcal_ics_url]);
+
+  const handleBackupNow = async () => {
+    setBackingUp(true);
+    try {
+      const res = await api.createBackupSnapshot();
+      setBackupMsg(
+        `Saved ${res.backupFile} + exported ${res.exportedJournals} journals & ${res.exportedNotes} study notes to Drive!`
+      );
+      setTimeout(() => setBackupMsg(null), 5000);
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  const handleSaveGcal = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateSettings({ gcal_ics_url: gcalUrl.trim() });
+    setGcalSaved(true);
+    setTimeout(() => setGcalSaved(false), 2000);
+  };
 
   const primaryLanUrl = networkInfo?.lanUrls[0] ?? 'http://<your-mac-ip>:4310';
   const mobileWebhookUrl = `${primaryLanUrl}/api/app-usage/mobile-event`;
@@ -217,15 +245,31 @@ export function SettingsPanel({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void loadSync()}
-            className="rounded-xl bg-[var(--bg-card)] p-2 text-[var(--text-muted)] hover:text-[var(--text-main)]"
-            title="Refresh sync stats"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={backingUp}
+              onClick={() => void handleBackupNow()}
+              className="pastel-btn rounded-xl px-3 py-1.5 text-xs font-bold disabled:opacity-60"
+            >
+              {backingUp ? 'Backing up...' : 'Backup & Export .md'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void loadSync()}
+              className="rounded-xl bg-[var(--bg-card)] p-2 text-[var(--text-muted)] hover:text-[var(--text-main)]"
+              title="Refresh sync stats"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
+
+        {backupMsg && (
+          <p className="mt-3 rounded-2xl bg-[var(--pastel-mint)] px-3.5 py-2 text-xs font-bold text-emerald-800 dark:text-emerald-200">
+            {backupMsg}
+          </p>
+        )}
 
         {syncStatus && (
           <div className="mt-4 space-y-3">
@@ -259,6 +303,30 @@ export function SettingsPanel({
             </div>
           </div>
         )}
+      </section>
+
+      {/* Google Calendar Sync */}
+      <section className="cozy-card cozy-card-peach rounded-3xl p-5">
+        <h3 className="text-sm font-extrabold text-[var(--text-main)]">Google Calendar Sync</h3>
+        <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+          Paste your Google Calendar <strong>Secret address in iCal format</strong> (.ics URL) from
+          Google Calendar → Settings → Integrate calendar.
+        </p>
+        <form onSubmit={handleSaveGcal} className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            type="url"
+            value={gcalUrl}
+            onChange={(e) => setGcalUrl(e.target.value)}
+            placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+            className="flex-1 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-input)] px-3.5 py-2 text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
+          />
+          <button
+            type="submit"
+            className="pastel-btn rounded-2xl px-4 py-2 text-xs font-bold"
+          >
+            {gcalSaved ? 'Saved!' : 'Save Feed'}
+          </button>
+        </form>
       </section>
 
       {/* Mobile Wi-Fi Access */}
