@@ -30,6 +30,199 @@ function todayDateStr() {
     const d = String(now.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
 }
+const RANK_TITLES = [
+    'Seedling',
+    'Daydreamer',
+    'Note Taker',
+    'Focus Sprout',
+    'Rhythm Keeper',
+    'Scholar',
+    'Flow Weaver',
+    'Starlight Sage',
+    'Melody Master',
+];
+function computeLevelInfo(totalXp) {
+    let level = 1;
+    let remaining = Math.max(0, totalXp);
+    let needed = 100;
+    while (remaining >= needed) {
+        remaining -= needed;
+        level += 1;
+        needed = 100 + (level - 1) * 50;
+    }
+    const rankTitle = RANK_TITLES[Math.min(level - 1, RANK_TITLES.length - 1)];
+    const progressPct = Math.min(100, Math.round((remaining / needed) * 100));
+    return {
+        level,
+        rankTitle,
+        currentLevelXp: remaining,
+        nextLevelXp: needed,
+        progressPct,
+    };
+}
+function awardXp(db, sourceType, sourceId, xp, label, earnedDate) {
+    if (xp <= 0)
+        return;
+    db.prepare(`INSERT INTO xp_events (source_type, source_id, xp, label, earned_date)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(source_type, source_id) DO UPDATE SET
+       xp = excluded.xp,
+       label = excluded.label,
+       earned_date = excluded.earned_date`).run(sourceType, sourceId, xp, label, earnedDate);
+}
+function revokeXp(db, sourceType, sourceId) {
+    db.prepare('DELETE FROM xp_events WHERE source_type = ? AND source_id = ?').run(sourceType, sourceId);
+}
+function addDays(dateStr, delta) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + delta);
+    const yy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+}
+function buildGamificationState(db, date) {
+    const totalXp = db.prepare('SELECT COALESCE(SUM(xp), 0) as s FROM xp_events').get().s;
+    const todayXp = db
+        .prepare('SELECT COALESCE(SUM(xp), 0) as s FROM xp_events WHERE earned_date = ?')
+        .get(date).s;
+    const levelInfo = computeLevelInfo(totalXp);
+    // Active days for streak calculation
+    const activeDayRows = db
+        .prepare('SELECT DISTINCT earned_date FROM xp_events ORDER BY earned_date DESC')
+        .all();
+    const activeSet = new Set(activeDayRows.map((r) => r.earned_date));
+    const today = todayDateStr();
+    let streak = 0;
+    let cursor = activeSet.has(today) ? today : addDays(today, -1);
+    while (activeSet.has(cursor)) {
+        streak += 1;
+        cursor = addDays(cursor, -1);
+    }
+    // Longest streak
+    const sortedAsc = [...activeSet].sort();
+    let longestStreak = 0;
+    let run = 0;
+    let prev = null;
+    for (const d of sortedAsc) {
+        if (prev && addDays(prev, 1) === d) {
+            run += 1;
+        }
+        else {
+            run = 1;
+        }
+        if (run > longestStreak)
+            longestStreak = run;
+        prev = d;
+    }
+    // Last 7 days activity
+    const weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weekActivity = [];
+    for (let i = 6; i >= 0; i--) {
+        const dStr = addDays(today, -i);
+        const [y, m, d] = dStr.split('-').map(Number);
+        const dayXp = db
+            .prepare('SELECT COALESCE(SUM(xp), 0) as s FROM xp_events WHERE earned_date = ?')
+            .get(dStr).s;
+        weekActivity.push({
+            date: dStr,
+            label: weekLabels[new Date(y, m - 1, d).getDay()],
+            active: dayXp > 0,
+            xp: dayXp,
+        });
+    }
+    // Daily quest live progress for `date`
+    const focusSec = db
+        .prepare(`SELECT COALESCE(SUM(
+           CASE
+             WHEN te.ended_at IS NOT NULL THEN CAST((julianday(te.ended_at) - julianday(te.started_at)) * 86400 AS INTEGER)
+             ELSE CAST((julianday('now') - julianday(te.started_at)) * 86400 AS INTEGER)
+           END
+         ), 0) as s
+         FROM time_entries te
+         LEFT JOIN categories c ON c.id = te.category_id
+         WHERE date(te.started_at, 'localtime') = ? AND COALESCE(c.is_productive, 1) = 1`)
+        .get(date).s;
+    const focusMinutes = Math.max(0, Math.floor(focusSec / 60));
+    const tasksCompleted = db
+        .prepare('SELECT COUNT(*) as c FROM tasks WHERE due_date = ? AND completed = 1')
+        .get(date).c;
+    const routinesCompleted = db
+        .prepare('SELECT COUNT(*) as c FROM routine_completions WHERE completed_date = ?')
+        .get(date).c;
+    const hasJournalOrMemory = db
+        .prepare(`SELECT COUNT(*) as c FROM journal_entries
+           WHERE entry_date = ? AND (title != '' OR content != '' OR reflection_learned != '' OR reflection_challenge != '' OR reflection_gratitude != '')`)
+        .get(date).c +
+        db.prepare('SELECT COUNT(*) as c FROM memories WHERE memory_date = ?').get(date).c;
+    const claimedRows = db
+        .prepare('SELECT quest_key FROM quest_claims WHERE claim_date = ?')
+        .all(date);
+    const claimedSet = new Set(claimedRows.map((r) => r.quest_key));
+    const quests = [
+        {
+            key: 'focus_25',
+            title: 'Focus Scholar',
+            description: 'Log 25 minutes of productive focus or study time',
+            xp: 40,
+            current: Math.min(25, focusMinutes),
+            target: 25,
+            unit: 'min',
+            completed: focusMinutes >= 25,
+            claimed: claimedSet.has('focus_25'),
+            accent: 'mint',
+        },
+        {
+            key: 'tasks_3',
+            title: 'Task Crusher',
+            description: 'Complete 3 daily tasks',
+            xp: 35,
+            current: Math.min(3, tasksCompleted),
+            target: 3,
+            unit: 'tasks',
+            completed: tasksCompleted >= 3,
+            claimed: claimedSet.has('tasks_3'),
+            accent: 'sky',
+        },
+        {
+            key: 'routines_2',
+            title: 'Habit Keeper',
+            description: 'Check off 2 daily routines',
+            xp: 30,
+            current: Math.min(2, routinesCompleted),
+            target: 2,
+            unit: 'habits',
+            completed: routinesCompleted >= 2,
+            claimed: claimedSet.has('routines_2'),
+            accent: 'butter',
+        },
+        {
+            key: 'reflect_1',
+            title: 'Mindful Moment',
+            description: 'Write a journal entry or save a memory',
+            xp: 30,
+            current: Math.min(1, hasJournalOrMemory),
+            target: 1,
+            unit: 'entry',
+            completed: hasJournalOrMemory >= 1,
+            claimed: claimedSet.has('reflect_1'),
+            accent: 'peach',
+        },
+    ];
+    const recentXpEvents = db
+        .prepare('SELECT * FROM xp_events ORDER BY id DESC LIMIT 10')
+        .all();
+    return {
+        totalXp,
+        todayXp,
+        ...levelInfo,
+        streak,
+        longestStreak,
+        weekActivity,
+        quests,
+        recentXpEvents,
+    };
+}
 apiRouter.get('/health', (_req, res) => {
     res.json({ ok: true, timestamp: new Date().toISOString() });
 });
@@ -61,15 +254,61 @@ apiRouter.get('/categories', (_req, res) => {
     res.json(rows);
 });
 apiRouter.post('/categories', (req, res) => {
-    const { name, color = '#8b5cf6', icon = 'sparkles', is_productive = 1 } = req.body;
+    const { name, color = '#38b2c4', icon = 'sparkles', is_productive = 1 } = req.body;
     if (!name?.trim())
         return res.status(400).json({ error: 'Name is required' });
     const db = getDb();
+    const existing = db
+        .prepare('SELECT id FROM categories WHERE LOWER(name) = LOWER(?)')
+        .get(name.trim());
+    if (existing) {
+        return res.status(409).json({ error: 'A category with that name already exists' });
+    }
     const info = db
         .prepare('INSERT INTO categories (name, color, icon, is_productive) VALUES (?, ?, ?, ?)')
         .run(name.trim(), color, icon, is_productive ? 1 : 0);
     const created = db.prepare('SELECT * FROM categories WHERE id = ?').get(info.lastInsertRowid);
     res.status(201).json(created);
+});
+apiRouter.patch('/categories/:id', (req, res) => {
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM categories WHERE id = ?').get(req.params.id);
+    if (!existing)
+        return res.status(404).json({ error: 'Category not found' });
+    const updates = [];
+    const values = [];
+    if (typeof req.body.name === 'string' && req.body.name.trim()) {
+        const dup = db
+            .prepare('SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND id != ?')
+            .get(req.body.name.trim(), req.params.id);
+        if (dup)
+            return res.status(409).json({ error: 'A category with that name already exists' });
+        updates.push('name = ?');
+        values.push(req.body.name.trim());
+    }
+    if (typeof req.body.color === 'string') {
+        updates.push('color = ?');
+        values.push(req.body.color);
+    }
+    if (typeof req.body.icon === 'string') {
+        updates.push('icon = ?');
+        values.push(req.body.icon);
+    }
+    if (req.body.is_productive !== undefined) {
+        updates.push('is_productive = ?');
+        values.push(req.body.is_productive ? 1 : 0);
+    }
+    if (updates.length > 0) {
+        values.push(req.params.id);
+        db.prepare(`UPDATE categories SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    }
+    const updated = db.prepare('SELECT * FROM categories WHERE id = ?').get(req.params.id);
+    res.json(updated);
+});
+apiRouter.delete('/categories/:id', (req, res) => {
+    const db = getDb();
+    db.prepare('DELETE FROM categories WHERE id = ?').run(req.params.id);
+    res.status(204).end();
 });
 // ─── Time Entries (Toggl-style Timers) ────────────────────────────────────────
 apiRouter.get('/time-entries', (req, res) => {
@@ -108,11 +347,21 @@ apiRouter.post('/time-entries/:id/stop', (req, res) => {
     const now = new Date().toISOString();
     db.prepare('UPDATE time_entries SET ended_at = ? WHERE id = ? AND ended_at IS NULL').run(now, req.params.id);
     const updated = db
-        .prepare(`SELECT te.*, c.name as category_name, c.color as category_color
+        .prepare(`SELECT te.*, c.name as category_name, c.color as category_color, COALESCE(c.is_productive, 1) as is_productive
        FROM time_entries te
        LEFT JOIN categories c ON c.id = te.category_id
        WHERE te.id = ?`)
         .get(req.params.id);
+    if (updated && updated.ended_at && updated.is_productive) {
+        const durSec = Math.floor((new Date(updated.ended_at).getTime() - new Date(updated.started_at).getTime()) / 1000);
+        if (durSec >= 60) {
+            const xp = Math.min(240, Math.max(5, Math.round((durSec / 60) * 2)));
+            const dayRow = db
+                .prepare("SELECT date(?, 'localtime') as d")
+                .get(updated.started_at);
+            awardXp(db, 'timer', String(updated.id), xp, `Focus: ${updated.title}`, dayRow.d);
+        }
+    }
     res.json(updated);
 });
 apiRouter.delete('/time-entries/:id', (req, res) => {
@@ -336,6 +585,15 @@ apiRouter.patch('/tasks/:id', (req, res) => {
        LEFT JOIN categories c ON c.id = t.category_id
        WHERE t.id = ?`)
         .get(req.params.id);
+    if (req.body.completed !== undefined) {
+        if (updated.completed === 1) {
+            const xp = updated.priority === 'high' ? 30 : 20;
+            awardXp(db, 'task', String(updated.id), xp, `Task: ${updated.title}`, updated.due_date);
+        }
+        else {
+            revokeXp(db, 'task', String(updated.id));
+        }
+    }
     res.json(updated);
 });
 apiRouter.delete('/tasks/:id', (req, res) => {
@@ -375,12 +633,15 @@ apiRouter.post('/routines/:id/toggle', (req, res) => {
     const exists = db
         .prepare('SELECT 1 FROM routine_completions WHERE routine_id = ? AND completed_date = ?')
         .get(req.params.id, date);
+    const routine = db.prepare('SELECT title FROM routines WHERE id = ?').get(req.params.id);
     if (exists) {
         db.prepare('DELETE FROM routine_completions WHERE routine_id = ? AND completed_date = ?').run(req.params.id, date);
+        revokeXp(db, 'routine', `${req.params.id}:${date}`);
         return res.json({ completed_today: false });
     }
     else {
         db.prepare('INSERT INTO routine_completions (routine_id, completed_date) VALUES (?, ?)').run(req.params.id, date);
+        awardXp(db, 'routine', `${req.params.id}:${date}`, 15, `Routine: ${routine?.title ?? 'Habit'}`, date);
         return res.json({ completed_today: true });
     }
 });
@@ -430,6 +691,13 @@ apiRouter.put('/journal/:date', (req, res) => {
        reflection_gratitude = excluded.reflection_gratitude,
        mood_rating = excluded.mood_rating,
        updated_at = datetime('now')`).run(date, title, content, reflection_learned, reflection_challenge, reflection_gratitude, Number(mood_rating) || 3);
+    if (title.trim() ||
+        content.trim() ||
+        reflection_learned.trim() ||
+        reflection_challenge.trim() ||
+        reflection_gratitude.trim()) {
+        awardXp(db, 'journal', date, 25, 'Daily Journal', date);
+    }
     const saved = db.prepare('SELECT * FROM journal_entries WHERE entry_date = ?').get(date);
     res.json(saved);
 });
@@ -471,6 +739,7 @@ apiRouter.post('/memories', (req, res) => {
        LEFT JOIN media_items mi ON mi.id = m.media_id
        WHERE m.id = ?`)
         .get(info.lastInsertRowid);
+    awardXp(db, 'memory', String(info.lastInsertRowid), 10, `Memory: ${title.trim()}`, memory_date);
     res.status(201).json(created);
 });
 apiRouter.delete('/memories/:id', (req, res) => {
@@ -582,6 +851,103 @@ apiRouter.get('/sync-status', (_req, res) => {
             memories: count('SELECT COUNT(*) as c FROM memories'),
             images: count("SELECT COUNT(*) as c FROM media_items WHERE kind = 'image'"),
             voiceMemos: count("SELECT COUNT(*) as c FROM media_items WHERE kind = 'voice'"),
+            studyNotes: count('SELECT COUNT(*) as c FROM study_notes'),
         },
     });
+});
+// ─── Gamification (XP, Levels, Streaks, Daily Quests) ─────────────────────────
+apiRouter.get('/gamification', (req, res) => {
+    const date = req.query.date || todayDateStr();
+    const db = getDb();
+    res.json(buildGamificationState(db, date));
+});
+apiRouter.post('/gamification/quests/claim', (req, res) => {
+    const { quest_key, date = todayDateStr() } = req.body;
+    if (!quest_key)
+        return res.status(400).json({ error: 'quest_key is required' });
+    const db = getDb();
+    const before = buildGamificationState(db, date);
+    const quest = before.quests.find((q) => q.key === quest_key);
+    if (!quest)
+        return res.status(404).json({ error: 'Quest not found' });
+    if (!quest.completed)
+        return res.status(400).json({ error: 'Quest is not completed yet' });
+    if (quest.claimed) {
+        return res.json({ state: before, leveledUp: false, xpAwarded: 0 });
+    }
+    db.prepare('INSERT INTO quest_claims (quest_key, claim_date, xp) VALUES (?, ?, ?)').run(quest.key, date, quest.xp);
+    awardXp(db, 'quest', `${quest.key}:${date}`, quest.xp, `Quest: ${quest.title}`, date);
+    const after = buildGamificationState(db, date);
+    res.json({
+        state: after,
+        leveledUp: after.level > before.level,
+        xpAwarded: quest.xp,
+    });
+});
+// ─── Obsidian-Style Study Notes ───────────────────────────────────────────────
+apiRouter.get('/study-notes', (_req, res) => {
+    const db = getDb();
+    const rows = db
+        .prepare(`SELECT n.*, c.name as category_name, c.color as category_color
+       FROM study_notes n
+       LEFT JOIN categories c ON c.id = n.category_id
+       ORDER BY n.updated_at DESC, n.id DESC`)
+        .all();
+    res.json(rows);
+});
+apiRouter.post('/study-notes', (req, res) => {
+    const { title, folder = 'General', content = '', category_id = null } = req.body;
+    if (!title?.trim())
+        return res.status(400).json({ error: 'Title is required' });
+    const db = getDb();
+    const info = db
+        .prepare(`INSERT INTO study_notes (title, folder, content, category_id)
+       VALUES (?, ?, ?, ?)`)
+        .run(title.trim(), folder.trim() || 'General', content, category_id);
+    const created = db
+        .prepare(`SELECT n.*, c.name as category_name, c.color as category_color
+       FROM study_notes n
+       LEFT JOIN categories c ON c.id = n.category_id
+       WHERE n.id = ?`)
+        .get(info.lastInsertRowid);
+    res.status(201).json(created);
+});
+apiRouter.patch('/study-notes/:id', (req, res) => {
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM study_notes WHERE id = ?').get(req.params.id);
+    if (!existing)
+        return res.status(404).json({ error: 'Note not found' });
+    const updates = [];
+    const values = [];
+    if (typeof req.body.title === 'string' && req.body.title.trim()) {
+        updates.push('title = ?');
+        values.push(req.body.title.trim());
+    }
+    if (typeof req.body.folder === 'string') {
+        updates.push('folder = ?');
+        values.push(req.body.folder.trim() || 'General');
+    }
+    if (typeof req.body.content === 'string') {
+        updates.push('content = ?');
+        values.push(req.body.content);
+    }
+    if (req.body.category_id !== undefined) {
+        updates.push('category_id = ?');
+        values.push(req.body.category_id);
+    }
+    updates.push("updated_at = datetime('now')");
+    values.push(req.params.id);
+    db.prepare(`UPDATE study_notes SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    const updated = db
+        .prepare(`SELECT n.*, c.name as category_name, c.color as category_color
+       FROM study_notes n
+       LEFT JOIN categories c ON c.id = n.category_id
+       WHERE n.id = ?`)
+        .get(req.params.id);
+    res.json(updated);
+});
+apiRouter.delete('/study-notes/:id', (req, res) => {
+    const db = getDb();
+    db.prepare('DELETE FROM study_notes WHERE id = ?').run(req.params.id);
+    res.status(204).end();
 });

@@ -5,18 +5,21 @@ import {
   CalendarDays,
   CheckSquare,
   Clock,
+  Flame,
   FolderHeart,
   Menu,
   Moon,
   Settings,
-  Sparkles,
+  Star,
   Sun,
+  Trophy,
   X,
 } from 'lucide-react';
 import type {
   AppSettings,
   Category,
   CompanionMood,
+  GamificationState,
   NetworkInfo,
   Routine,
   Task,
@@ -32,34 +35,39 @@ import { StudyPanel } from '@/components/study/StudyPanel';
 import { JournalMemoryPanel } from '@/components/journal/JournalMemoryPanel';
 import { MediaVaultPanel } from '@/components/media/MediaVaultPanel';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
+import { QuestsProgressPanel } from '@/components/gamification/QuestsProgressPanel';
+import { CategoryManagerModal } from '@/components/categories/CategoryManagerModal';
 
-type Tab = 'today' | 'study' | 'tracker' | 'journal' | 'vault' | 'calendar' | 'settings';
+type Tab = 'today' | 'study' | 'tracker' | 'quests' | 'journal' | 'vault' | 'calendar' | 'settings';
 
-const DESKTOP_TABS: { id: Tab; label: string; icon: typeof CheckSquare }[] = [
-  { id: 'today', label: 'Today', icon: CheckSquare },
-  { id: 'study', label: 'Study', icon: BookOpen },
-  { id: 'tracker', label: 'Time & Apps', icon: Clock },
-  { id: 'journal', label: 'Journal', icon: BookHeart },
-  { id: 'vault', label: 'Vault', icon: FolderHeart },
-  { id: 'calendar', label: 'Calendar', icon: CalendarDays },
-  { id: 'settings', label: 'Settings', icon: Settings },
+const DESKTOP_TABS: { id: Tab; label: string; icon: typeof CheckSquare; activeBg: string }[] = [
+  { id: 'today', label: 'Today', icon: CheckSquare, activeBg: 'var(--pastel-sky)' },
+  { id: 'study', label: 'Study', icon: BookOpen, activeBg: 'var(--pastel-mint)' },
+  { id: 'tracker', label: 'Time & Apps', icon: Clock, activeBg: 'var(--pastel-butter)' },
+  { id: 'quests', label: 'Quests', icon: Trophy, activeBg: 'var(--pastel-pink)' },
+  { id: 'journal', label: 'Journal', icon: BookHeart, activeBg: 'var(--pastel-peach)' },
+  { id: 'vault', label: 'Vault', icon: FolderHeart, activeBg: 'var(--pastel-lavender)' },
+  { id: 'calendar', label: 'Calendar', icon: CalendarDays, activeBg: 'var(--pastel-mint)' },
+  { id: 'settings', label: 'Settings', icon: Settings, activeBg: 'var(--pastel-sky)' },
 ];
 
-const MOBILE_PRIMARY_TABS: { id: Tab; label: string; icon: typeof CheckSquare }[] = [
-  { id: 'today', label: 'Today', icon: CheckSquare },
-  { id: 'study', label: 'Study', icon: BookOpen },
-  { id: 'tracker', label: 'Time', icon: Clock },
+const MOBILE_PRIMARY_TABS: { id: Tab; label: string; icon: typeof CheckSquare; activeBg: string }[] = [
+  { id: 'today', label: 'Today', icon: CheckSquare, activeBg: 'var(--pastel-sky)' },
+  { id: 'study', label: 'Study', icon: BookOpen, activeBg: 'var(--pastel-mint)' },
+  { id: 'tracker', label: 'Time', icon: Clock, activeBg: 'var(--pastel-butter)' },
 ];
 
 export function App() {
   const [activeTab, setActiveTab] = useState<Tab>('today');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(toLocalDateStr());
   const [mood, setMood] = useState<CompanionMood>('idle');
   const [categories, setCategories] = useState<Category[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [gamification, setGamification] = useState<GamificationState | null>(null);
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const [settings, setSettings] = useState<AppSettings>({
     theme: 'pastel',
@@ -81,13 +89,14 @@ export function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [cats, timeEntries, dayTasks, dayRoutines, net, appSettings] = await Promise.all([
+      const [cats, timeEntries, dayTasks, dayRoutines, net, appSettings, gamif] = await Promise.all([
         api.getCategories(),
         api.getTimeEntries(selectedDate),
         api.getTasks(selectedDate),
         api.getRoutines(selectedDate),
         api.getNetworkInfo(),
         api.getSettings(),
+        api.getGamification(selectedDate),
       ]);
       setCategories(cats);
       setEntries(timeEntries);
@@ -95,6 +104,7 @@ export function App() {
       setRoutines(dayRoutines);
       setNetworkInfo(net);
       setSettings(appSettings);
+      setGamification(gamif);
     } catch (err) {
       console.error('Failed to load planner data:', err);
     }
@@ -136,26 +146,31 @@ export function App() {
     setMobileMenuOpen(false);
   };
 
+  const claimableQuests =
+    gamification?.quests.filter((q) => q.completed && !q.claimed).length ?? 0;
+
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text-main)]">
+    <div className="app-canvas flex h-screen flex-col overflow-hidden text-[var(--text-main)]">
       {/* Top Bar — padded on desktop for macOS traffic-light buttons */}
-      <header className="app-drag flex h-14 shrink-0 items-center justify-between border-b border-[var(--border-card)] bg-[var(--bg-header)] px-4 backdrop-blur lg:pl-20">
+      <header className="app-drag app-header-bar flex h-14 shrink-0 items-center justify-between border-b border-[var(--border-card)] px-3 backdrop-blur sm:px-4 lg:pl-20">
         <div className="app-no-drag flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--pastel-sky)] text-sky-700 dark:text-sky-300">
-            <Sparkles className="h-4 w-4" />
-          </div>
+          <img
+            src="/melody-logo.png"
+            alt="Melody"
+            className="h-9 w-9 shrink-0 object-contain drop-shadow-sm"
+          />
           <div>
-            <h1 className="text-sm font-extrabold tracking-tight text-[var(--text-main)]">
+            <h1 className="text-sm leading-tight font-black tracking-tight text-[var(--text-main)]">
               Melody
             </h1>
-            <p className="hidden text-[11px] font-medium text-[var(--text-muted)] sm:block">
+            <p className="hidden text-[11px] font-semibold text-[var(--text-muted)] sm:block">
               {selectedDate}
             </p>
           </div>
         </div>
 
         {/* Desktop Navigation Tabs */}
-        <nav className="app-no-drag hidden items-center gap-1 rounded-2xl bg-[var(--bg-subtle)] p-1 md:flex">
+        <nav className="app-no-drag hidden items-center gap-1 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)]/75 p-1 md:flex">
           {DESKTOP_TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -164,26 +179,50 @@ export function App() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                className={`relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-extrabold transition ${
                   active
-                    ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm'
+                    ? 'text-[var(--text-main)] shadow-xs'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
                 }`}
+                style={active ? { background: tab.activeBg } : undefined}
               >
                 <Icon className="h-3.5 w-3.5" />
                 {tab.label}
+                {tab.id === 'quests' && claimableQuests > 0 && (
+                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-black text-slate-900">
+                    {claimableQuests}
+                  </span>
+                )}
               </button>
             );
           })}
         </nav>
 
-        {/* Right Controls: Date + Quick Dark Mode Toggle */}
-        <div className="app-no-drag flex items-center gap-2">
+        {/* Right Controls: Level/Streak Pill + Date + Quick Dark Mode Toggle */}
+        <div className="app-no-drag flex items-center gap-1.5 sm:gap-2">
+          {gamification && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('quests')}
+              className="relative inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-card)] bg-[var(--pastel-butter)] px-2.5 py-1.5 text-xs font-extrabold text-[var(--text-main)] transition hover:brightness-95"
+              title={`Level ${gamification.level} · ${gamification.rankTitle} (${gamification.currentLevelXp}/${gamification.nextLevelXp} XP)`}
+            >
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
+              <span>Lv.{gamification.level}</span>
+              <span className="hidden items-center gap-0.5 text-amber-700 sm:inline-flex dark:text-amber-300">
+                <Flame className="h-3 w-3" />
+                {gamification.streak}
+              </span>
+              {claimableQuests > 0 && (
+                <span className="absolute -top-1 -right-1 h-2.5 w-2.5 animate-ping rounded-full bg-pink-500" />
+              )}
+            </button>
+          )}
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="rounded-xl border border-[var(--border-card)] bg-[var(--bg-input)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-main)] focus:border-[var(--accent)] focus:outline-none"
+            className="w-[116px] rounded-xl border border-[var(--border-card)] bg-[var(--bg-input)] px-2 py-1.5 text-xs font-semibold text-[var(--text-main)] focus:border-[var(--accent)] focus:outline-none sm:w-auto sm:px-2.5"
           />
           <button
             type="button"
@@ -192,7 +231,7 @@ export function App() {
                 theme: settings.theme === 'pastel' ? 'dark' : 'pastel',
               })
             }
-            className="rounded-xl bg-[var(--bg-subtle)] p-2 text-[var(--text-main)] transition hover:brightness-95"
+            className="rounded-xl border border-[var(--border-card)] bg-[var(--pastel-sky)] p-2 text-[var(--text-main)] transition hover:brightness-95"
             title="Switch Pastel / Dark theme"
           >
             {settings.theme === 'pastel' ? (
@@ -228,6 +267,7 @@ export function App() {
                 onTasksChanged={() => void loadAll()}
                 onRoutinesChanged={() => void loadAll()}
                 onCelebrate={triggerCelebrate}
+                onOpenCategoryManager={() => setCategoryModalOpen(true)}
               />
               {/* On mobile, keep Today focused on Tasks & Routines; Time & Apps has its own clean tab */}
               <div className="hidden md:block">
@@ -237,6 +277,7 @@ export function App() {
                   categories={categories}
                   entries={entries}
                   onEntriesChanged={() => void loadAll()}
+                  onOpenCategoryManager={() => setCategoryModalOpen(true)}
                 />
               </div>
             </div>
@@ -246,10 +287,9 @@ export function App() {
             <StudyPanel
               categories={categories}
               runningEntry={runningEntry}
-              initialNotes={settings.study_notes}
-              onSaveNotes={(notes) => void handleUpdateSettings({ study_notes: notes })}
               onEntriesChanged={() => void loadAll()}
               onCelebrate={triggerCelebrate}
+              onOpenCategoryManager={() => setCategoryModalOpen(true)}
             />
           )}
 
@@ -260,6 +300,16 @@ export function App() {
               categories={categories}
               entries={entries}
               onEntriesChanged={() => void loadAll()}
+              onOpenCategoryManager={() => setCategoryModalOpen(true)}
+            />
+          )}
+
+          {activeTab === 'quests' && (
+            <QuestsProgressPanel
+              gamification={gamification}
+              selectedDate={selectedDate}
+              onUpdated={setGamification}
+              onCelebrate={triggerCelebrate}
             />
           )}
 
@@ -267,7 +317,10 @@ export function App() {
             <JournalMemoryPanel
               selectedDate={selectedDate}
               onSelectDate={setSelectedDate}
-              onCelebrate={triggerCelebrate}
+              onCelebrate={() => {
+                triggerCelebrate();
+                void loadAll();
+              }}
             />
           )}
 
@@ -287,6 +340,7 @@ export function App() {
                 onTasksChanged={() => void loadAll()}
                 onRoutinesChanged={() => void loadAll()}
                 onCelebrate={triggerCelebrate}
+                onOpenCategoryManager={() => setCategoryModalOpen(true)}
               />
             </div>
           )}
@@ -294,15 +348,17 @@ export function App() {
           {activeTab === 'settings' && (
             <SettingsPanel
               settings={settings}
+              categories={categories}
               networkInfo={networkInfo}
               onUpdateSettings={(patch) => void handleUpdateSettings(patch)}
+              onOpenCategoryManager={() => setCategoryModalOpen(true)}
             />
           )}
         </main>
       </div>
 
       {/* Clean Mobile 4-Item Bottom Bar (Today, Study, Time, Menu) */}
-      <nav className="fixed right-3 bottom-3 left-3 z-40 grid grid-cols-4 rounded-3xl border border-[var(--border-card)] bg-[var(--bg-glass)] p-1.5 shadow-lg backdrop-blur md:hidden">
+      <nav className="fixed right-3 bottom-3 left-3 z-40 grid grid-cols-4 gap-1 rounded-3xl border border-[var(--border-card)] bg-[var(--bg-glass)] p-1.5 shadow-lg backdrop-blur md:hidden">
         {MOBILE_PRIMARY_TABS.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id && !mobileMenuOpen;
@@ -311,11 +367,10 @@ export function App() {
               key={tab.id}
               type="button"
               onClick={() => navigateMobile(tab.id)}
-              className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 text-[11px] font-bold transition ${
-                active
-                  ? 'bg-[var(--pastel-sky)] text-[var(--text-main)]'
-                  : 'text-[var(--text-muted)]'
+              className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 text-[11px] font-extrabold transition ${
+                active ? 'text-[var(--text-main)] shadow-xs' : 'text-[var(--text-muted)]'
               }`}
+              style={active ? { background: tab.activeBg } : undefined}
             >
               <Icon className="h-4 w-4" />
               {tab.label}
@@ -325,47 +380,60 @@ export function App() {
         <button
           type="button"
           onClick={() => setMobileMenuOpen((v) => !v)}
-          className={`flex flex-col items-center gap-0.5 rounded-2xl py-2 text-[11px] font-bold transition ${
+          className={`relative flex flex-col items-center gap-0.5 rounded-2xl py-2 text-[11px] font-extrabold transition ${
             mobileMenuOpen ||
+            activeTab === 'quests' ||
             activeTab === 'journal' ||
             activeTab === 'vault' ||
             activeTab === 'calendar' ||
             activeTab === 'settings'
-              ? 'bg-[var(--pastel-mint)] text-[var(--text-main)]'
+              ? 'bg-[var(--pastel-pink)] text-[var(--text-main)] shadow-xs'
               : 'text-[var(--text-muted)]'
           }`}
         >
           <Menu className="h-4 w-4" />
           Menu
+          {claimableQuests > 0 && (
+            <span className="absolute top-1.5 right-4 h-2 w-2 rounded-full bg-amber-400" />
+          )}
         </button>
       </nav>
 
-      {/* Mobile Slide-Over Menu Sheet (Journal, Vault, Calendar, Settings) */}
+      {/* Mobile Slide-Over Menu Sheet (Quests, Journal, Vault, Calendar, Settings) */}
       {mobileMenuOpen && (
         <div
           className="fixed inset-0 z-50 flex items-end bg-black/40 backdrop-blur-xs md:hidden"
           onClick={() => setMobileMenuOpen(false)}
         >
           <div
-            className="cozy-card w-full rounded-t-3xl p-5 pb-8"
+            className="cozy-card cozy-card-sky w-full rounded-t-3xl p-5 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-[var(--text-main)]">Explore Melody</h3>
+              <div className="flex items-center gap-2">
+                <img src="/melody-logo.png" alt="Melody" className="h-7 w-7 object-contain" />
+                <h3 className="text-sm font-black text-[var(--text-main)]">Explore Melody</h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="rounded-xl bg-[var(--bg-subtle)] p-1.5 text-[var(--text-muted)]"
+                className="rounded-xl bg-[var(--bg-card)] p-1.5 text-[var(--text-muted)]"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               {[
+                {
+                  id: 'quests' as const,
+                  label: claimableQuests > 0 ? `Quests (${claimableQuests}!)` : 'Quests & XP',
+                  icon: Trophy,
+                  bg: 'var(--pastel-pink)',
+                },
                 { id: 'journal' as const, label: 'Journal & Memories', icon: BookHeart, bg: 'var(--pastel-mint)' },
                 { id: 'vault' as const, label: 'Photos & Voice', icon: FolderHeart, bg: 'var(--pastel-peach)' },
                 { id: 'calendar' as const, label: 'Calendar', icon: CalendarDays, bg: 'var(--pastel-sky)' },
-                { id: 'settings' as const, label: 'Settings & Sync', icon: Settings, bg: 'var(--pastel-butter)' },
+                { id: 'settings' as const, label: 'Settings & Categories', icon: Settings, bg: 'var(--pastel-butter)' },
               ].map((item) => {
                 const Icon = item.icon;
                 return (
@@ -373,11 +441,13 @@ export function App() {
                     key={item.id}
                     type="button"
                     onClick={() => navigateMobile(item.id)}
-                    className="flex flex-col items-start gap-2 rounded-2xl p-4 text-left transition active:scale-98"
+                    className="flex flex-col items-start gap-2 rounded-2xl border border-[var(--border-card)] p-4 text-left transition active:scale-98"
                     style={{ background: item.bg }}
                   >
                     <Icon className="h-5 w-5 text-[var(--text-main)]" />
-                    <span className="text-xs font-bold text-[var(--text-main)]">{item.label}</span>
+                    <span className="text-xs font-extrabold text-[var(--text-main)]">
+                      {item.label}
+                    </span>
                   </button>
                 );
               })}
@@ -385,6 +455,14 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* Custom Category Manager Modal */}
+      <CategoryManagerModal
+        open={categoryModalOpen}
+        categories={categories}
+        onClose={() => setCategoryModalOpen(false)}
+        onCategoriesChanged={() => void loadAll()}
+      />
     </div>
   );
 }

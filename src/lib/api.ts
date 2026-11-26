@@ -4,12 +4,14 @@ import type {
   AppUsageLog,
   AppUsageSummary,
   Category,
+  GamificationState,
   HistoryDaySummary,
   JournalEntry,
   MediaItem,
   MemoryItem,
   NetworkInfo,
   Routine,
+  StudyNote,
   SyncStatus,
   Task,
   TimeEntry,
@@ -31,6 +33,59 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   getNetworkInfo: () => request<NetworkInfo>('/api/network-info'),
   getCategories: () => request<Category[]>('/api/categories'),
+  createCategory: (payload: {
+    name: string;
+    color: string;
+    icon?: string;
+    is_productive?: boolean;
+  }) =>
+    request<Category>('/api/categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateCategory: (
+    id: number,
+    payload: { name?: string; color?: string; icon?: string; is_productive?: boolean }
+  ) =>
+    request<Category>(`/api/categories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteCategory: (id: number) => request<void>(`/api/categories/${id}`, { method: 'DELETE' }),
+
+  // Gamification (XP, Levels, Streaks, Daily Quests)
+  getGamification: (date: string) =>
+    request<GamificationState>(`/api/gamification?date=${date}`),
+  claimQuest: (quest_key: string, date: string) =>
+    request<{ state: GamificationState; leveledUp: boolean; xpAwarded: number }>(
+      '/api/gamification/quests/claim',
+      {
+        method: 'POST',
+        body: JSON.stringify({ quest_key, date }),
+      }
+    ),
+
+  // Obsidian-style Study Notes
+  getStudyNotes: () => request<StudyNote[]>('/api/study-notes'),
+  createStudyNote: (payload: {
+    title: string;
+    folder?: string;
+    content?: string;
+    category_id?: number | null;
+  }) =>
+    request<StudyNote>('/api/study-notes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateStudyNote: (
+    id: number,
+    payload: { title?: string; folder?: string; content?: string; category_id?: number | null }
+  ) =>
+    request<StudyNote>(`/api/study-notes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteStudyNote: (id: number) => request<void>(`/api/study-notes/${id}`, { method: 'DELETE' }),
 
   // Time entries
   getTimeEntries: (date: string) => request<TimeEntry[]>(`/api/time-entries?date=${date}`),

@@ -151,5 +151,63 @@ export interface SyncStatus {
     memories: number;
     images: number;
     voiceMemos: number;
+    studyNotes?: number;
   };
+}
+
+export interface StudyNote {
+  id: number;
+  title: string;
+  folder: string;
+  content: string;
+  category_id: number | null;
+  category_name?: string | null;
+  category_color?: string | null;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface DailyQuest {
+  key: string;
+  title: string;
+  description: string;
+  xp: number;
+  current: number;
+  target: number;
+  unit: string;
+  completed: boolean;
+  claimed: boolean;
+  accent: 'mint' | 'sky' | 'butter' | 'peach';
+}
+
+export interface XpEvent {
+  id: number;
+  source_type: string;
+  source_id: string;
+  xp: number;
+  label: string;
+  earned_date: string;
+  created_at: string;
+}
+
+export interface WeekActivityDay {
+  date: string;
+  label: string;
+  active: boolean;
+  xp: number;
+}
+
+export interface GamificationState {
+  totalXp: number;
+  todayXp: number;
+  level: number;
+  rankTitle: string;
+  currentLevelXp: number;
+  nextLevelXp: number;
+  progressPct: number;
+  streak: number;
+  longestStreak: number;
+  weekActivity: WeekActivityDay[];
+  quests: DailyQuest[];
+  recentXpEvents: XpEvent[];
 }

@@ -117,13 +117,13 @@ export function MediaVaultPanel({ selectedDate }: MediaVaultPanelProps) {
   return (
     <div className="space-y-4">
       {/* Mobile-only clean pill switcher */}
-      <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-[var(--bg-subtle)] p-1 md:hidden">
+      <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-glass)] p-1 md:hidden">
         <button
           type="button"
           onClick={() => setMobileSection('voice')}
-          className={`rounded-xl py-2 text-xs font-bold transition ${
+          className={`rounded-xl py-2 text-xs font-extrabold transition ${
             mobileSection === 'voice'
-              ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm'
+              ? 'bg-[var(--pastel-peach)] text-[var(--text-main)] shadow-xs'
               : 'text-[var(--text-muted)]'
           }`}
         >
@@ -132,9 +132,9 @@ export function MediaVaultPanel({ selectedDate }: MediaVaultPanelProps) {
         <button
           type="button"
           onClick={() => setMobileSection('photos')}
-          className={`rounded-xl py-2 text-xs font-bold transition ${
+          className={`rounded-xl py-2 text-xs font-extrabold transition ${
             mobileSection === 'photos'
-              ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm'
+              ? 'bg-[var(--pastel-sky)] text-[var(--text-main)] shadow-xs'
               : 'text-[var(--text-muted)]'
           }`}
         >
@@ -144,7 +144,7 @@ export function MediaVaultPanel({ selectedDate }: MediaVaultPanelProps) {
 
       {/* Voice Memo Recorder & List */}
       <section
-        className={`cozy-card rounded-3xl p-5 ${
+        className={`cozy-card cozy-card-peach rounded-3xl p-5 ${
           mobileSection === 'voice' ? 'block' : 'hidden md:block'
         }`}
       >
@@ -226,7 +226,7 @@ export function MediaVaultPanel({ selectedDate }: MediaVaultPanelProps) {
 
       {/* Image Storage & Gallery */}
       <section
-        className={`cozy-card rounded-3xl p-5 ${
+        className={`cozy-card cozy-card-sky rounded-3xl p-5 ${
           mobileSection === 'photos' ? 'block' : 'hidden md:block'
         }`}
       >

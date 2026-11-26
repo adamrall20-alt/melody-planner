@@ -11,6 +11,7 @@ interface TasksRoutinesPanelProps {
   onTasksChanged: () => void;
   onRoutinesChanged: () => void;
   onCelebrate: () => void;
+  onOpenCategoryManager: () => void;
 }
 
 const TIME_SLOTS: { id: Routine['time_of_day']; label: string; bg: string }[] = [
@@ -28,6 +29,7 @@ export function TasksRoutinesPanel({
   onTasksChanged,
   onRoutinesChanged,
   onCelebrate,
+  onOpenCategoryManager,
 }: TasksRoutinesPanelProps) {
   const [mobileSection, setMobileSection] = useState<'tasks' | 'routines'>('tasks');
   const [taskTitle, setTaskTitle] = useState('');
@@ -94,13 +96,13 @@ export function TasksRoutinesPanel({
   return (
     <div className="space-y-4">
       {/* Mobile-only clean pill switcher between Tasks and Routines */}
-      <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-[var(--bg-subtle)] p-1 lg:hidden">
+      <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-glass)] p-1 lg:hidden">
         <button
           type="button"
           onClick={() => setMobileSection('tasks')}
-          className={`rounded-xl py-2 text-xs font-bold transition ${
+          className={`rounded-xl py-2 text-xs font-extrabold transition ${
             mobileSection === 'tasks'
-              ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm'
+              ? 'bg-[var(--pastel-sky)] text-[var(--text-main)] shadow-xs'
               : 'text-[var(--text-muted)]'
           }`}
         >
@@ -109,9 +111,9 @@ export function TasksRoutinesPanel({
         <button
           type="button"
           onClick={() => setMobileSection('routines')}
-          className={`rounded-xl py-2 text-xs font-bold transition ${
+          className={`rounded-xl py-2 text-xs font-extrabold transition ${
             mobileSection === 'routines'
-              ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm'
+              ? 'bg-[var(--pastel-butter)] text-[var(--text-main)] shadow-xs'
               : 'text-[var(--text-muted)]'
           }`}
         >
@@ -122,7 +124,7 @@ export function TasksRoutinesPanel({
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Daily Tasks */}
         <section
-          className={`cozy-card rounded-3xl p-5 ${
+          className={`cozy-card cozy-card-sky rounded-3xl p-5 ${
             mobileSection === 'tasks' ? 'block' : 'hidden lg:block'
           }`}
         >
@@ -171,20 +173,31 @@ export function TasksRoutinesPanel({
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
               </select>
-              <select
-                value={taskCategoryId ?? ''}
-                onChange={(e) =>
-                  setTaskCategoryId(e.target.value ? Number(e.target.value) : null)
-                }
-                className="rounded-xl border border-[var(--border-card)] bg-[var(--bg-input)] px-2.5 py-1.5 text-[var(--text-main)]"
-              >
-                <option value="">No category</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <div className="inline-flex items-center gap-1">
+                <select
+                  value={taskCategoryId ?? ''}
+                  onChange={(e) =>
+                    setTaskCategoryId(e.target.value ? Number(e.target.value) : null)
+                  }
+                  className="rounded-xl border border-[var(--border-card)] bg-[var(--bg-input)] px-2.5 py-1.5 text-[var(--text-main)]"
+                >
+                  <option value="">No category</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={onOpenCategoryManager}
+                  className="inline-flex items-center gap-1 rounded-xl border border-[var(--border-card)] bg-[var(--pastel-pink)] px-2.5 py-1.5 font-bold text-[var(--text-main)] transition hover:brightness-95"
+                  title="Create or manage custom categories"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  New
+                </button>
+              </div>
             </div>
           </form>
 
@@ -246,7 +259,7 @@ export function TasksRoutinesPanel({
 
         {/* Daily Routines */}
         <section
-          className={`cozy-card rounded-3xl p-5 ${
+          className={`cozy-card cozy-card-butter rounded-3xl p-5 ${
             mobileSection === 'routines' ? 'block' : 'hidden lg:block'
           }`}
         >

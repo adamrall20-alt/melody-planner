@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Play, Square, Trash2, Monitor, Clock, Power, History, Trophy } from 'lucide-react';
+import { Play, Square, Trash2, Monitor, Clock, Power, History, Trophy, Plus } from 'lucide-react';
 import type {
   AllTimeTotals,
   AppUsageLog,
@@ -17,6 +17,7 @@ interface ActivityTrackerPanelProps {
   categories: Category[];
   entries: TimeEntry[];
   onEntriesChanged: () => void;
+  onOpenCategoryManager: () => void;
 }
 
 export function ActivityTrackerPanel({
@@ -25,6 +26,7 @@ export function ActivityTrackerPanel({
   categories,
   entries,
   onEntriesChanged,
+  onOpenCategoryManager,
 }: ActivityTrackerPanelProps) {
   const [mobileTab, setMobileTab] = useState<'timer' | 'apps' | 'history'>('timer');
   const [title, setTitle] = useState('');
@@ -117,21 +119,22 @@ export function ActivityTrackerPanel({
   return (
     <div className="space-y-4">
       {/* Mobile-only clean segmented tabs */}
-      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-[var(--bg-subtle)] p-1 md:hidden">
+      <div className="grid grid-cols-3 gap-1 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-glass)] p-1 md:hidden">
         {[
-          { id: 'timer' as const, label: 'Timer' },
-          { id: 'apps' as const, label: 'Apps' },
-          { id: 'history' as const, label: 'History' },
+          { id: 'timer' as const, label: 'Timer', bg: 'var(--pastel-mint)' },
+          { id: 'apps' as const, label: 'Apps', bg: 'var(--pastel-sky)' },
+          { id: 'history' as const, label: 'History', bg: 'var(--pastel-butter)' },
         ].map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setMobileTab(t.id)}
-            className={`rounded-xl py-2 text-xs font-bold transition ${
+            className={`rounded-xl py-2 text-xs font-extrabold transition ${
               mobileTab === t.id
-                ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm'
+                ? 'text-[var(--text-main)] shadow-xs'
                 : 'text-[var(--text-muted)]'
             }`}
+            style={mobileTab === t.id ? { background: t.bg } : undefined}
           >
             {t.label}
           </button>
@@ -140,7 +143,7 @@ export function ActivityTrackerPanel({
 
       {/* Live Timer Bar */}
       <section
-        className={`cozy-card rounded-3xl p-5 ${
+        className={`cozy-card cozy-card-mint rounded-3xl p-5 ${
           mobileTab === 'timer' ? 'block' : 'hidden md:block'
         }`}
       >
@@ -194,7 +197,7 @@ export function ActivityTrackerPanel({
               placeholder="What are you working on?"
               className="flex-1 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-input)] px-3.5 py-2.5 text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
             />
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               <select
                 value={categoryId ?? ''}
                 onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : null)}
@@ -206,6 +209,14 @@ export function ActivityTrackerPanel({
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={onOpenCategoryManager}
+                className="inline-flex items-center justify-center rounded-2xl border border-[var(--border-card)] bg-[var(--pastel-pink)] px-3 text-[var(--text-main)] transition hover:brightness-95"
+                title="Add or manage custom categories (e.g. Japanese)"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
               <button
                 type="submit"
                 className="pastel-btn inline-flex items-center gap-1.5 rounded-2xl px-5 py-2.5 text-sm font-bold"
@@ -277,7 +288,7 @@ export function ActivityTrackerPanel({
 
       {/* Active Window Tracking */}
       <section
-        className={`cozy-card rounded-3xl p-5 ${
+        className={`cozy-card cozy-card-sky rounded-3xl p-5 ${
           mobileTab === 'apps' ? 'block' : 'hidden md:block'
         }`}
       >
@@ -389,7 +400,7 @@ export function ActivityTrackerPanel({
       {/* All-Time Global Totals + 14-Day History */}
       <div className={mobileTab === 'history' ? 'space-y-4' : 'hidden space-y-4 md:block'}>
         {totals && (
-          <section className="cozy-card rounded-3xl p-5">
+          <section className="cozy-card cozy-card-butter rounded-3xl p-5">
             <div className="mb-3 flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--pastel-butter)] text-amber-700 dark:text-amber-300">
                 <Trophy className="h-4 w-4" />
@@ -438,7 +449,7 @@ export function ActivityTrackerPanel({
           </section>
         )}
 
-        <section className="cozy-card rounded-3xl p-5">
+        <section className="cozy-card cozy-card-peach rounded-3xl p-5">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--pastel-peach)] text-rose-700 dark:text-rose-300">

@@ -367,8 +367,8 @@ export function MelodyCompanion({
 
   const viewportBg =
     theme === 'pastel'
-      ? 'bg-[radial-gradient(ellipse_at_top,_#e0f4fc_0%,_#eef7f3_55%,_#fdf6ec_100%)]'
-      : 'bg-[radial-gradient(ellipse_at_top,_rgba(125,211,252,0.14),_rgba(28,27,26,0.95)_65%,_rgba(18,18,17,1)_100%)]';
+      ? 'bg-[radial-gradient(ellipse_at_top,_#c7eafc_0%,_#d9f5ea_48%,_#fde5ee_100%)]'
+      : 'bg-[radial-gradient(ellipse_at_top,_rgba(56,189,248,0.2),_rgba(20,30,36,0.95)_58%,_rgba(24,20,28,1)_100%)]';
 
   return (
     <aside className="cozy-card relative flex h-full flex-col overflow-hidden rounded-3xl">

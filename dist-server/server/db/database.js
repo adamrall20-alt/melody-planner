@@ -145,12 +145,43 @@ function runMigrations(db) {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS xp_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      xp INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      earned_date TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(source_type, source_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS quest_claims (
+      quest_key TEXT NOT NULL,
+      claim_date TEXT NOT NULL,
+      xp INTEGER NOT NULL,
+      claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (quest_key, claim_date)
+    );
+
+    CREATE TABLE IF NOT EXISTS study_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      folder TEXT NOT NULL DEFAULT 'General',
+      content TEXT NOT NULL DEFAULT '',
+      category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_time_entries_started ON time_entries(started_at);
     CREATE INDEX IF NOT EXISTS idx_app_usage_started ON app_usage_logs(started_at);
     CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
     CREATE INDEX IF NOT EXISTS idx_journal_date ON journal_entries(entry_date);
     CREATE INDEX IF NOT EXISTS idx_memories_date ON memories(memory_date);
     CREATE INDEX IF NOT EXISTS idx_media_kind_date ON media_items(kind, entry_date);
+    CREATE INDEX IF NOT EXISTS idx_xp_events_date ON xp_events(earned_date);
+    CREATE INDEX IF NOT EXISTS idx_study_notes_updated ON study_notes(updated_at);
   `);
 }
 function seedDefaults(db) {
@@ -178,5 +209,59 @@ function seedDefaults(db) {
         ];
         for (const row of defaultRoutines)
             insertRoutine.run(...row);
+    }
+    const noteCount = db.prepare('SELECT COUNT(*) as c FROM study_notes').get().c;
+    if (noteCount === 0) {
+        const legacyNotes = db
+            .prepare("SELECT value FROM app_settings WHERE key = 'study_notes'")
+            .get();
+        const studyCat = db
+            .prepare("SELECT id FROM categories WHERE LOWER(name) = 'study' LIMIT 1")
+            .get();
+        if (legacyNotes && legacyNotes.value.trim()) {
+            db.prepare('INSERT INTO study_notes (title, folder, content, category_id) VALUES (?, ?, ?, ?)').run('Quick Study Notes', 'General', legacyNotes.value, studyCat?.id ?? null);
+        }
+        else {
+            db.prepare('INSERT INTO study_notes (title, folder, content, category_id) VALUES (?, ?, ?, ?)').run('Study Workspace Guide', 'General', `# Study Workspace\n\nWelcome to your **Obsidian-style** markdown study notes!\n\n## Tips\n- Create folders by typing any folder name (e.g. \`Japanese\`, \`BA Practice\`, \`Coding\`)\n- Use **Edit / Split / Preview** above to write and read cleanly\n- Pair your notes with the **Focus Timer** and **Ambient Audio** mixer\n\n### Today's Study Goals\n- [ ] Review key concepts\n- [ ] Practice with active recall\n- [ ] Summarize takeaways in your own words\n`, studyCat?.id ?? null);
+        }
+    }
+    // Backfill initial XP from existing completed activities on first M3 migration
+    const xpCount = db.prepare('SELECT COUNT(*) as c FROM xp_events').get().c;
+    if (xpCount === 0) {
+        const insertXp = db.prepare('INSERT OR IGNORE INTO xp_events (source_type, source_id, xp, label, earned_date) VALUES (?, ?, ?, ?, ?)');
+        const completedTasks = db
+            .prepare('SELECT id, title, priority, due_date FROM tasks WHERE completed = 1')
+            .all();
+        for (const t of completedTasks) {
+            insertXp.run('task', String(t.id), t.priority === 'high' ? 30 : 20, `Task: ${t.title}`, t.due_date);
+        }
+        const routineDone = db
+            .prepare(`SELECT rc.routine_id, rc.completed_date, r.title
+         FROM routine_completions rc
+         JOIN routines r ON r.id = rc.routine_id`)
+            .all();
+        for (const r of routineDone) {
+            insertXp.run('routine', `${r.routine_id}:${r.completed_date}`, 15, `Routine: ${r.title}`, r.completed_date);
+        }
+        const completedTimers = db
+            .prepare(`SELECT te.id, te.title, date(te.started_at, 'localtime') as day,
+                CAST((julianday(te.ended_at) - julianday(te.started_at)) * 86400 AS INTEGER) as dur_sec,
+                COALESCE(c.is_productive, 1) as is_productive
+         FROM time_entries te
+         LEFT JOIN categories c ON c.id = te.category_id
+         WHERE te.ended_at IS NOT NULL`)
+            .all();
+        for (const te of completedTimers) {
+            if (te.is_productive && te.dur_sec >= 60) {
+                const xp = Math.min(240, Math.max(5, Math.round((te.dur_sec / 60) * 2)));
+                insertXp.run('timer', String(te.id), xp, `Focus: ${te.title}`, te.day);
+            }
+        }
+        const journals = db
+            .prepare('SELECT entry_date FROM journal_entries')
+            .all();
+        for (const j of journals) {
+            insertXp.run('journal', j.entry_date, 25, 'Daily Journal', j.entry_date);
+        }
     }
 }

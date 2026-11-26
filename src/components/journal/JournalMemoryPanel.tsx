@@ -121,13 +121,13 @@ export function JournalMemoryPanel({
   return (
     <div className="space-y-4">
       {/* Clean Pill Sub-navigation */}
-      <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-[var(--bg-subtle)] p-1 sm:inline-grid sm:w-auto">
+      <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-glass)] p-1 sm:inline-grid sm:w-auto">
         <button
           type="button"
           onClick={() => setSubView('journal')}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition ${
+          className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-extrabold transition ${
             subView === 'journal'
-              ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm'
+              ? 'bg-[var(--pastel-mint)] text-[var(--text-main)] shadow-xs'
               : 'text-[var(--text-muted)]'
           }`}
         >
@@ -137,9 +137,9 @@ export function JournalMemoryPanel({
         <button
           type="button"
           onClick={() => setSubView('memories')}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition ${
+          className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs font-extrabold transition ${
             subView === 'memories'
-              ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm'
+              ? 'bg-[var(--pastel-pink)] text-[var(--text-main)] shadow-xs'
               : 'text-[var(--text-muted)]'
           }`}
         >
@@ -150,7 +150,7 @@ export function JournalMemoryPanel({
 
       {subView === 'journal' ? (
         <div className="grid gap-4 xl:grid-cols-[1fr_240px]">
-          <section className="cozy-card space-y-4 rounded-3xl p-5">
+          <section className="cozy-card cozy-card-peach space-y-4 rounded-3xl p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <input
                 type="text"
@@ -250,7 +250,7 @@ export function JournalMemoryPanel({
             </div>
           </section>
 
-          <aside className="cozy-card rounded-3xl p-4">
+          <aside className="cozy-card cozy-card-sky rounded-3xl p-4">
             <h3 className="mb-2.5 text-xs font-bold tracking-wider text-[var(--text-muted)] uppercase">
               Recent Entries
             </h3>
@@ -286,7 +286,7 @@ export function JournalMemoryPanel({
         </div>
       ) : (
         <div className="space-y-4">
-          <section className="cozy-card rounded-3xl p-5">
+          <section className="cozy-card cozy-card-pink rounded-3xl p-5">
             <h3 className="mb-3 text-sm font-bold text-[var(--text-main)]">Save a Memory</h3>
             <form onSubmit={(e) => void handleAddMemory(e)} className="space-y-2.5">
               <div className="flex flex-col gap-2 sm:flex-row">

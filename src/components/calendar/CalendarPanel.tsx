@@ -43,7 +43,7 @@ export function CalendarPanel({ selectedDate, onSelectDate }: CalendarPanelProps
   ];
 
   return (
-    <section className="cozy-card rounded-3xl p-4 sm:p-5">
+    <section className="cozy-card cozy-card-mint rounded-3xl p-4 sm:p-5">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--pastel-mint)] text-emerald-700 dark:text-emerald-300">
