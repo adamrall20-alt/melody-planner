@@ -177,6 +177,12 @@ export function StudyRoomScene({
             if (mesh.name === 'WindowGlass' && mesh.material instanceof THREE.MeshStandardMaterial) {
               windowSkyMat = mesh.material;
             }
+            if (mesh.name === 'PillowLeft' || mesh.name === 'PillowRight') {
+              // GLB node rotation around world origin lifted the pillows ~17cm above the mattress.
+              // Reset rotation and nestle them flush on top of the mattress (y ≈ 0.54).
+              mesh.rotation.set(0, 0, 0);
+              mesh.position.y = -0.025;
+            }
           }
         });
         scene.add(roomGltf.scene);
@@ -331,27 +337,28 @@ export function StudyRoomScene({
           if (chest) chest.rotation.x = -0.32;
           if (upperChest) upperChest.rotation.x = -0.2;
 
-          // Chin-in-hands pose: elbows resting on duvet, forearms bent up, softly cupped hands under cheeks/chin
+          // Cozy propped-on-elbows reading pose: elbows on duvet, forearms & hands resting forward flush with the bed
           if (leftShoulder && rightShoulder) {
-            leftShoulder.rotation.set(0.12, -0.22, 0.14);
-            rightShoulder.rotation.set(0.12, 0.22, -0.14);
+            leftShoulder.rotation.set(0.08, -0.14, 0.12);
+            rightShoulder.rotation.set(0.08, 0.14, -0.12);
           }
           if (leftUpperArm && rightUpperArm) {
-            // Elbows resting on the duvet right underneath her cheeks
-            leftUpperArm.rotation.set(-0.76, -0.24, -1.16);
-            rightUpperArm.rotation.set(-0.76, 0.24, 1.16);
+            // Upper arms angled down so elbows rest comfortably on the duvet
+            leftUpperArm.rotation.set(-0.74, -0.14, -1.16);
+            rightUpperArm.rotation.set(-0.74, 0.14, 1.16);
           }
           if (leftLowerArm && rightLowerArm) {
-            // Forearms bent up so wrists/cupped palms sit right UNDER her chin/cheeks (face clearly visible!)
-            leftLowerArm.rotation.set(-0.16, -2.18, 0.22);
-            rightLowerArm.rotation.set(-0.16, 2.18, -0.22);
+            // Forearms bent ~85° forward flush with the bed, with natural pronation so palms rest flat down
+            leftLowerArm.rotation.set(0.55, -1.48, 0.16);
+            rightLowerArm.rotation.set(0.55, 1.48, -0.16);
           }
           if (leftHand && rightHand) {
-            leftHand.rotation.set(0.12, 0.28, -0.42);
-            rightHand.rotation.set(0.12, -0.28, 0.42);
+            // Complete pronation so palms lie flat on the duvet beside the book
+            leftHand.rotation.set(0.75, 0.08, -0.06);
+            rightHand.rotation.set(0.75, -0.08, 0.06);
           }
 
-          // Softly curl fingers into cozy cupped hands cradling her cheeks/chin
+          // Gently relaxed open fingers resting on the duvet
           const curlFinger = (side: 'left' | 'right', bone: string, angle: number) => {
             const node = currentVrm?.humanoid?.getNormalizedBoneNode(
               `${side}${bone}` as Parameters<NonNullable<VRM['humanoid']>['getNormalizedBoneNode']>[0]
@@ -360,8 +367,15 @@ export function StudyRoomScene({
           };
           for (const side of ['left', 'right'] as const) {
             for (const f of ['Index', 'Middle', 'Ring', 'Little']) {
-              curlFinger(side, `${f}Proximal`, 0.72);
-              curlFinger(side, `${f}Intermediate`, 0.85);
+              curlFinger(side, `${f}Proximal`, 0.18);
+              curlFinger(side, `${f}Intermediate`, 0.16);
+            }
+            const thumbProx = currentVrm?.humanoid?.getNormalizedBoneNode(
+              `${side}ThumbProximal` as Parameters<NonNullable<VRM['humanoid']>['getNormalizedBoneNode']>[0]
+            );
+            if (thumbProx) {
+              thumbProx.rotation.y = side === 'left' ? -0.25 : 0.25;
+              thumbProx.rotation.z = side === 'left' ? -0.12 : 0.12;
             }
           }
 
