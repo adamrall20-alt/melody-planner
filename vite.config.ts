@@ -12,16 +12,18 @@ export default defineConfig({
     },
   },
   server: {
-    host: '0.0.0.0',
+    host: process.env.MELODY_LAN === '1' ? '0.0.0.0' : '127.0.0.1',
     port: 5173,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:4310',
-        changeOrigin: true,
+        changeOrigin: false,
+        xfwd: true,
       },
       '/media': {
         target: 'http://127.0.0.1:4310',
-        changeOrigin: true,
+        changeOrigin: false,
+        xfwd: true,
       },
     },
   },

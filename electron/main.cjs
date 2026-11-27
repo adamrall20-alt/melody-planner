@@ -35,8 +35,22 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
     },
   });
+
+  // Prevent navigation or popups to untrusted external URLs inside Electron
+  const allowedOrigin = new URL(APP_URL).origin;
+  win.webContents.on('will-navigate', (event, url) => {
+    try {
+      if (new URL(url).origin !== allowedOrigin) {
+        event.preventDefault();
+      }
+    } catch {
+      event.preventDefault();
+    }
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   if (process.platform === 'darwin' && icon && app.dock) {
     app.dock.setIcon(icon);

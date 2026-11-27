@@ -65,10 +65,19 @@ export interface Routine {
 
 export interface NetworkInfo {
   port: number;
+  lanEnabled: boolean;
   lanUrls: string[];
   trackerActive: boolean;
   platform: string;
   dataDir?: string;
+  isLocalhost?: boolean;
+  accessToken?: string;
+}
+
+export interface AuthStatus {
+  authenticated: boolean;
+  isLocalhost: boolean;
+  lanEnabled: boolean;
 }
 
 export interface HistoryDaySummary {

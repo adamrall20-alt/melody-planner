@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import multer from 'multer';
 import { getDataDir, getDb, getMediaDir } from '../db/database.js';
 import { activeWindowTracker } from '../tracker/activeWindow.js';
 import { buildTasksIcs, parseIcsEvents } from '../calendar/ics.js';
+import { checkLoginRateLimit, clearLoginFailures, deriveSessionValue, getClientIp, getLanIpv4Addresses, getOrCreateAccessToken, getSafeMediaExtension, isAuthenticatedRequest, isLocalhostRequest, isSafeCalendarUrl, isValidDateStr, LAN_ENABLED, PORT, recordLoginFailure, rotateAccessToken, safeResolveInside, SESSION_COOKIE_NAME, verifyAccessToken, } from '../security.js';
 export const apiRouter = Router();
 const storage = multer.diskStorage({
     destination: (req, _file, cb) => {
@@ -14,8 +14,12 @@ const storage = multer.diskStorage({
         fs.mkdirSync(dir, { recursive: true });
         cb(null, dir);
     },
-    filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname || '') || (file.mimetype.includes('audio') ? '.webm' : '.png');
+    filename: (req, file, cb) => {
+        const kind = req.body?.kind === 'voice' ? 'voice' : 'image';
+        const ext = getSafeMediaExtension(file.mimetype, kind);
+        if (!ext) {
+            return cb(new Error('Unsupported file type'), '');
+        }
         const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
         cb(null, safeName);
     },
@@ -23,6 +27,16 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage,
     limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max
+    fileFilter: (req, file, cb) => {
+        const kind = req.body?.kind === 'voice' ? 'voice' : 'image';
+        const ext = getSafeMediaExtension(file.mimetype, kind);
+        if (!ext) {
+            return cb(new Error(kind === 'voice'
+                ? 'Only standard audio files (webm, m4a, mp3, ogg, wav, aac) are allowed'
+                : 'Only standard image files (png, jpg, webp, gif, heic) are allowed'));
+        }
+        cb(null, true);
+    },
 });
 function todayDateStr() {
     const now = new Date();
@@ -227,25 +241,59 @@ function buildGamificationState(db, date) {
 apiRouter.get('/health', (_req, res) => {
     res.json({ ok: true, timestamp: new Date().toISOString() });
 });
-apiRouter.get('/network-info', (_req, res) => {
-    const interfaces = os.networkInterfaces();
-    const lanUrls = [];
-    const port = Number(process.env.PORT || 4310);
-    for (const ifaceList of Object.values(interfaces)) {
-        if (!ifaceList)
-            continue;
-        for (const iface of ifaceList) {
-            if (iface.family === 'IPv4' && !iface.internal) {
-                lanUrls.push(`http://${iface.address}:${port}`);
-            }
-        }
-    }
+// ─── Phone / LAN Authentication ───────────────────────────────────────────────
+apiRouter.get('/auth/status', (req, res) => {
     res.json({
-        port,
+        authenticated: isAuthenticatedRequest(req, false),
+        isLocalhost: isLocalhostRequest(req),
+        lanEnabled: LAN_ENABLED,
+    });
+});
+apiRouter.post('/auth/login', (req, res) => {
+    const clientIp = getClientIp(req);
+    const limit = checkLoginRateLimit(clientIp);
+    if (!limit.allowed) {
+        return res.status(429).json({
+            error: `Too many failed attempts. Try again in ${limit.retryAfterSec ?? 60}s.`,
+        });
+    }
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+    if (!verifyAccessToken(token)) {
+        recordLoginFailure(clientIp);
+        return res.status(401).json({ error: 'Invalid access token' });
+    }
+    clearLoginFailures(clientIp);
+    const sessionVal = deriveSessionValue(getOrCreateAccessToken());
+    res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionVal)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`);
+    res.json({ ok: true });
+});
+apiRouter.post('/auth/logout', (_req, res) => {
+    res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
+    res.json({ ok: true });
+});
+apiRouter.post('/auth/rotate-token', (req, res) => {
+    if (!isLocalhostRequest(req)) {
+        return res.status(403).json({ error: 'Token can only be regenerated from this computer' });
+    }
+    const newToken = rotateAccessToken();
+    res.json({ accessToken: newToken });
+});
+apiRouter.get('/network-info', (req, res) => {
+    const isLocal = isLocalhostRequest(req);
+    const lanUrls = getLanIpv4Addresses().map((ip) => `http://${ip}:${PORT}`);
+    res.json({
+        port: PORT,
+        lanEnabled: LAN_ENABLED,
         lanUrls,
         trackerActive: activeWindowTracker.isRunning,
         platform: process.platform,
-        dataDir: getDataDir(),
+        isLocalhost: isLocal,
+        ...(isLocal
+            ? {
+                dataDir: getDataDir(),
+                accessToken: getOrCreateAccessToken(),
+            }
+            : {}),
     });
 });
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -732,6 +780,9 @@ apiRouter.get('/journal/recent', (req, res) => {
 });
 apiRouter.put('/journal/:date', (req, res) => {
     const date = req.params.date;
+    if (!isValidDateStr(date)) {
+        return res.status(400).json({ error: 'Invalid date format (expected YYYY-MM-DD)' });
+    }
     const { title = '', content = '', reflection_learned = '', reflection_challenge = '', reflection_gratitude = '', mood_rating = 3, } = req.body;
     const db = getDb();
     db.prepare(`INSERT INTO journal_entries (
@@ -818,7 +869,16 @@ apiRouter.get('/media', (req, res) => {
             .all();
     res.json(rows.map(attachMediaUrl));
 });
-apiRouter.post('/media/upload', upload.single('file'), (req, res) => {
+apiRouter.post('/media/upload', (req, res, next) => {
+    upload.single('file')(req, res, (err) => {
+        if (err) {
+            return res.status(400).json({
+                error: err instanceof Error ? err.message : 'File upload rejected',
+            });
+        }
+        next();
+    });
+}, (req, res) => {
     const file = req.file;
     if (!file)
         return res.status(400).json({ error: 'File is required' });
@@ -881,7 +941,12 @@ apiRouter.patch('/settings', (req, res) => {
         upsert.run('study_notes', req.body.study_notes);
     }
     if (typeof req.body.gcal_ics_url === 'string') {
-        upsert.run('gcal_ics_url', req.body.gcal_ics_url.trim());
+        const trimmedUrl = req.body.gcal_ics_url.trim();
+        const check = isSafeCalendarUrl(trimmedUrl);
+        if (!check.ok) {
+            return res.status(400).json({ error: check.reason || 'Invalid calendar URL' });
+        }
+        upsert.run('gcal_ics_url', trimmedUrl);
         gcalCache = null;
     }
     const rows = db.prepare('SELECT key, value FROM app_settings').all();
@@ -915,7 +980,18 @@ apiRouter.get('/calendar/google-events', async (req, res) => {
             raw = gcalCache.raw;
         }
         else {
-            const response = await fetch(url);
+            const check = isSafeCalendarUrl(url);
+            if (!check.ok) {
+                return res.status(400).json({
+                    connected: true,
+                    error: check.reason || 'Blocked unsafe calendar URL',
+                    events: [],
+                });
+            }
+            const response = await fetch(url, {
+                redirect: 'error',
+                signal: AbortSignal.timeout(10_000),
+            });
             if (!response.ok) {
                 return res.status(502).json({
                     connected: true,
@@ -991,15 +1067,24 @@ apiRouter.post('/sync/backup', (_req, res) => {
         ]
             .filter(Boolean)
             .join('\n');
-        fs.writeFileSync(path.join(journalsDir, `${j.entry_date}.md`), md, 'utf8');
+        const safeDate = isValidDateStr(j.entry_date)
+            ? j.entry_date
+            : j.entry_date.replace(/[^0-9-]/g, '') || 'unknown';
+        const journalPath = safeResolveInside(journalsDir, `${safeDate}.md`);
+        if (journalPath) {
+            fs.writeFileSync(journalPath, md, 'utf8');
+        }
     }
     const notes = db.prepare('SELECT * FROM study_notes ORDER BY id ASC').all();
     for (const n of notes) {
         const safeFolder = (n.folder || 'General').replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'General';
         const safeTitle = (n.title || `note-${n.id}`).replace(/[^a-zA-Z0-9 _-]/g, '').trim() || `note-${n.id}`;
-        const folderPath = path.join(notesDir, safeFolder);
-        fs.mkdirSync(folderPath, { recursive: true });
-        fs.writeFileSync(path.join(folderPath, `${safeTitle}.md`), n.content || '', 'utf8');
+        const folderPath = safeResolveInside(notesDir, safeFolder);
+        const notePath = safeResolveInside(notesDir, safeFolder, `${safeTitle}.md`);
+        if (folderPath && notePath) {
+            fs.mkdirSync(folderPath, { recursive: true });
+            fs.writeFileSync(notePath, n.content || '', 'utf8');
+        }
     }
     res.json({
         ok: true,

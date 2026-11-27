@@ -3,6 +3,7 @@ import type {
   AppSettings,
   AppUsageLog,
   AppUsageSummary,
+  AuthStatus,
   CalendarEvent,
   Category,
   GamificationState,
@@ -20,6 +21,7 @@ import type {
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
     ...options,
   });
@@ -32,6 +34,16 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getAuthStatus: () => request<AuthStatus>('/api/auth/status'),
+  loginWithToken: (token: string) =>
+    request<{ ok: boolean }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+  logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+  rotateAccessToken: () =>
+    request<{ accessToken: string }>('/api/auth/rotate-token', { method: 'POST' }),
+
   getNetworkInfo: () => request<NetworkInfo>('/api/network-info'),
   getCategories: () => request<Category[]>('/api/categories'),
   createCategory: (payload: {
@@ -204,7 +216,11 @@ export const api = {
     form.append('entry_date', payload.entry_date);
     form.append('duration_sec', String(payload.duration_sec ?? 0));
     form.append('file', payload.file, payload.filename ?? (payload.file instanceof File ? payload.file.name : 'memo.webm'));
-    const res = await fetch('/api/media/upload', { method: 'POST', body: form });
+    const res = await fetch('/api/media/upload', {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
     if (!res.ok) throw new Error(await res.text());
     return res.json() as Promise<MediaItem>;
   },

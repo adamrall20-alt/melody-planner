@@ -7,9 +7,12 @@ import {
   Clock,
   Flame,
   FolderHeart,
+  KeyRound,
+  Lock,
   Menu,
   Moon,
   Settings,
+  ShieldCheck,
   Star,
   Sun,
   Trophy,
@@ -74,6 +77,75 @@ export function App() {
     eye_tracking: true,
     study_notes: '',
   });
+  const [authState, setAuthState] = useState<'checking' | 'authenticated' | 'locked'>('checking');
+  const [tokenInput, setTokenInput] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
+
+  // Check authentication (and handle one-tap ?pair=<token> phone links)
+  useEffect(() => {
+    let cancelled = false;
+    async function initAuth() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const pairToken = params.get('pair');
+        if (pairToken) {
+          // Immediately strip token from address bar so it isn't left in browser history
+          params.delete('pair');
+          const cleanUrl =
+            window.location.pathname + (params.toString() ? `?${params.toString()}` : '') + window.location.hash;
+          window.history.replaceState({}, '', cleanUrl);
+          try {
+            await api.loginWithToken(pairToken);
+            if (!cancelled) setAuthState('authenticated');
+            return;
+          } catch {
+            if (!cancelled) {
+              setAuthError('Pairing link is invalid or expired. Enter your current token below.');
+              setAuthState('locked');
+            }
+            return;
+          }
+        }
+
+        const status = await api.getAuthStatus();
+        if (!cancelled) {
+          setAuthState(status.authenticated ? 'authenticated' : 'locked');
+        }
+      } catch {
+        if (!cancelled) setAuthState('authenticated');
+      }
+    }
+    void initAuth();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tokenInput.trim()) return;
+    setUnlocking(true);
+    setAuthError(null);
+    try {
+      await api.loginWithToken(tokenInput.trim());
+      setTokenInput('');
+      setAuthState('authenticated');
+    } catch (err) {
+      let msg = 'Invalid access token';
+      if (err instanceof Error) {
+        try {
+          const parsed = JSON.parse(err.message) as { error?: string };
+          if (parsed.error) msg = parsed.error;
+        } catch {
+          if (err.message) msg = err.message;
+        }
+      }
+      setAuthError(msg);
+    } finally {
+      setUnlocking(false);
+    }
+  };
 
   // Apply theme class on <html>
   useEffect(() => {
@@ -88,6 +160,7 @@ export function App() {
   }, [settings.theme]);
 
   const loadAll = useCallback(async () => {
+    if (authState !== 'authenticated') return;
     try {
       const [cats, timeEntries, dayTasks, dayRoutines, net, appSettings, gamif] = await Promise.all([
         api.getCategories(),
@@ -108,7 +181,7 @@ export function App() {
     } catch (err) {
       console.error('Failed to load planner data:', err);
     }
-  }, [selectedDate]);
+  }, [selectedDate, authState]);
 
   useEffect(() => {
     void loadAll();
@@ -148,6 +221,71 @@ export function App() {
 
   const claimableQuests =
     gamification?.quests.filter((q) => q.completed && !q.claimed).length ?? 0;
+
+  if (authState === 'checking') {
+    return (
+      <div className="app-canvas flex h-screen items-center justify-center p-4 text-[var(--text-main)]">
+        <div className="cozy-card cozy-card-sky flex items-center gap-3 rounded-3xl px-6 py-4">
+          <ShieldCheck className="h-5 w-5 animate-pulse text-[var(--accent)]" />
+          <span className="text-sm font-extrabold">Checking security...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (authState === 'locked') {
+    return (
+      <div className="app-canvas flex h-screen items-center justify-center p-4 text-[var(--text-main)]">
+        <form
+          onSubmit={(e) => void handleUnlock(e)}
+          className="cozy-card cozy-card-sky w-full max-w-md rounded-3xl p-6 shadow-xl"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--pastel-pink)] text-pink-700">
+              <Lock className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-base font-black text-[var(--text-main)]">Melody Planner Locked</h1>
+              <p className="text-xs text-[var(--text-muted)]">
+                Enter your device access token from Settings on your laptop.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            <label className="block text-xs font-bold text-[var(--text-muted)]">
+              Access Token
+            </label>
+            <div className="relative">
+              <KeyRound className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+              <input
+                type="password"
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                placeholder="Paste access token..."
+                autoFocus
+                className="w-full rounded-2xl border border-[var(--border-card)] bg-[var(--bg-input)] py-2.5 pr-3.5 pl-10 font-mono text-xs text-[var(--text-main)] focus:border-[var(--accent)] focus:outline-none"
+              />
+            </div>
+
+            {authError && (
+              <p className="rounded-xl bg-rose-500/15 px-3 py-2 text-xs font-bold text-rose-700 dark:text-rose-300">
+                {authError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={unlocking || !tokenInput.trim()}
+              className="pastel-btn w-full rounded-2xl py-2.5 text-xs font-extrabold disabled:opacity-60"
+            >
+              {unlocking ? 'Unlocking...' : 'Unlock This Device'}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="app-canvas flex h-screen flex-col overflow-hidden text-[var(--text-main)]">
@@ -360,6 +498,10 @@ export function App() {
               networkInfo={networkInfo}
               onUpdateSettings={(patch) => void handleUpdateSettings(patch)}
               onOpenCategoryManager={() => setCategoryModalOpen(true)}
+              onNetworkInfoChanged={() => void loadAll()}
+              onLockDevice={() => {
+                void api.logout().finally(() => setAuthState('locked'));
+              }}
             />
           )}
         </main>

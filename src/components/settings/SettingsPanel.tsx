@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react';
 import {
   Cloud,
   Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
   Moon,
   Sun,
   Wifi,
   RefreshCw,
+  ShieldCheck,
   Tag,
   Plus,
   Smartphone,
@@ -21,6 +25,8 @@ interface SettingsPanelProps {
   networkInfo: NetworkInfo | null;
   onUpdateSettings: (patch: Partial<AppSettings>) => void;
   onOpenCategoryManager: () => void;
+  onNetworkInfoChanged?: () => void;
+  onLockDevice?: () => void;
 }
 
 export function SettingsPanel({
@@ -29,10 +35,16 @@ export function SettingsPanel({
   networkInfo,
   onUpdateSettings,
   onOpenCategoryManager,
+  onNetworkInfoChanged,
+  onLockDevice,
 }: SettingsPanelProps) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedPairUrl, setCopiedPairUrl] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [rotatingToken, setRotatingToken] = useState(false);
   const [testPingMsg, setTestPingMsg] = useState<string | null>(null);
   const [backupMsg, setBackupMsg] = useState<string | null>(null);
   const [backingUp, setBackingUp] = useState(false);
@@ -64,15 +76,31 @@ export function SettingsPanel({
   };
 
   const primaryLanUrl = networkInfo?.lanUrls[0] ?? 'http://<your-mac-ip>:4310';
-  const mobileWebhookUrl = `${primaryLanUrl}/api/app-usage/mobile-event`;
+  const accessToken = networkInfo?.accessToken ?? '';
+  const pairingUrl = accessToken
+    ? `${primaryLanUrl}/?pair=${encodeURIComponent(accessToken)}`
+    : primaryLanUrl;
+  const mobileWebhookUrl = accessToken
+    ? `${primaryLanUrl}/api/app-usage/mobile-event?token=${encodeURIComponent(accessToken)}`
+    : `${primaryLanUrl}/api/app-usage/mobile-event`;
 
-  const handleCopyWebhook = async () => {
+  const copyText = async (text: string, onDone: (v: boolean) => void) => {
     try {
-      await navigator.clipboard.writeText(mobileWebhookUrl);
-      setCopiedUrl(true);
-      setTimeout(() => setCopiedUrl(false), 1800);
+      await navigator.clipboard.writeText(text);
+      onDone(true);
+      setTimeout(() => onDone(false), 1800);
     } catch {
       // ignore clipboard errors
+    }
+  };
+
+  const handleRotateToken = async () => {
+    setRotatingToken(true);
+    try {
+      await api.rotateAccessToken();
+      onNetworkInfoChanged?.();
+    } finally {
+      setRotatingToken(false);
     }
   };
 
@@ -80,6 +108,7 @@ export function SettingsPanel({
     try {
       const res = await fetch('/api/app-usage/mobile-event', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ app_name: 'Anki', duration_sec: 60, device: 'iPhone' }),
       });
@@ -329,36 +358,151 @@ export function SettingsPanel({
         </form>
       </section>
 
-      {/* Mobile Wi-Fi Access */}
+      {/* Mobile Wi-Fi Access & Security */}
       {networkInfo && (
         <section className="cozy-card cozy-card-sky rounded-3xl p-5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--pastel-sky)] text-sky-700 dark:text-sky-300">
-              <Wifi className="h-4 w-4" />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--pastel-sky)] text-sky-700 dark:text-sky-300">
+                <Wifi className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-[var(--text-main)]">
+                  Phone Access &amp; Wi-Fi Security
+                </h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Protected with token auth so strangers on school/public Wi-Fi can&apos;t get in.
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-extrabold text-[var(--text-main)]">
-                Connect from Phone / Tablet
-              </h3>
-              <p className="text-xs text-[var(--text-muted)]">
-                Open on any device on the same Wi-Fi network:
+
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-extrabold ${
+                networkInfo.lanEnabled
+                  ? 'bg-[var(--pastel-butter)] text-amber-800 dark:text-amber-200'
+                  : 'bg-[var(--pastel-mint)] text-emerald-800 dark:text-emerald-200'
+              }`}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {networkInfo.lanEnabled
+                ? 'Phone Wi-Fi Mode (Token Locked)'
+                : 'School Wi-Fi Safe (Local Only)'}
+            </span>
+          </div>
+
+          {!networkInfo.lanEnabled ? (
+            <div className="mt-3 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)]/85 p-3.5 text-xs text-[var(--text-muted)]">
+              <p className="font-bold text-[var(--text-main)]">
+                Currently unreachable from other devices on Wi-Fi (127.0.0.1 only).
+              </p>
+              <p className="mt-1">
+                When you&apos;re on trusted home Wi-Fi and want to use your phone, start Melody with{' '}
+                <code className="rounded bg-[var(--bg-subtle)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-main)]">
+                  npm run dev:lan
+                </code>{' '}
+                or{' '}
+                <code className="rounded bg-[var(--bg-subtle)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-main)]">
+                  npm run start:lan
+                </code>
+                .
               </p>
             </div>
-          </div>
-          <div className="mt-3 space-y-1.5">
-            {networkInfo.lanUrls.length > 0 ? (
-              networkInfo.lanUrls.map((url) => (
-                <div
-                  key={url}
-                  className="rounded-2xl bg-[var(--bg-card)]/85 px-3.5 py-2 font-mono text-xs font-semibold text-[var(--text-main)]"
-                >
-                  {url}
+          ) : (
+            <div className="mt-3 space-y-2">
+              {networkInfo.lanUrls.length > 0 ? (
+                networkInfo.lanUrls.map((url) => (
+                  <div
+                    key={url}
+                    className="rounded-2xl bg-[var(--bg-card)]/85 px-3.5 py-2 font-mono text-xs font-semibold text-[var(--text-main)]"
+                  >
+                    {url}
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-[var(--text-muted)]">No LAN Wi-Fi address detected.</p>
+              )}
+            </div>
+          )}
+
+          {/* Pairing Link & Access Token (only shown on this laptop) */}
+          {networkInfo.isLocalhost && accessToken && (
+            <div className="mt-4 space-y-3 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)]/85 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--pastel-mint)] text-emerald-700 dark:text-emerald-300">
+                    <KeyRound className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-[var(--text-main)]">
+                      Phone Pairing Key
+                    </h4>
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      Required to unlock Melody from your phone (stays signed in for 30 days)
+                    </p>
+                  </div>
                 </div>
-              ))
-            ) : (
-              <p className="text-xs text-[var(--text-muted)]">No LAN Wi-Fi address detected.</p>
-            )}
-          </div>
+                <button
+                  type="button"
+                  disabled={rotatingToken}
+                  onClick={() => void handleRotateToken()}
+                  className="rounded-xl bg-[var(--pastel-peach)] px-3 py-1.5 text-[11px] font-extrabold text-[var(--text-main)] transition hover:brightness-95 disabled:opacity-60"
+                  title="Generates a new key and logs out all paired phones"
+                >
+                  {rotatingToken ? 'Rotating...' : 'Regenerate Key'}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--border-card)] bg-[var(--bg-input)] px-3 py-2">
+                <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--text-main)]">
+                  {showToken ? accessToken : '••••••••••••••••••••••••••••••••'}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => setShowToken((v) => !v)}
+                  className="rounded-lg p-1 text-[var(--text-muted)] hover:text-[var(--text-main)]"
+                  title={showToken ? 'Hide key' : 'Show key'}
+                >
+                  {showToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyText(accessToken, setCopiedToken)}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--pastel-sky)] px-2.5 py-1 text-[11px] font-bold text-[var(--text-main)]"
+                >
+                  {copiedToken ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  {copiedToken ? 'Copied' : 'Copy Key'}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--bg-subtle)] px-3 py-2 text-[11px]">
+                <span className="text-[var(--text-muted)]">
+                  Or copy a one-tap pairing link for your phone:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void copyText(pairingUrl, setCopiedPairUrl)}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--pastel-mint)] px-2.5 py-1 font-bold text-[var(--text-main)]"
+                >
+                  {copiedPairUrl ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  {copiedPairUrl ? 'Link Copied!' : 'Copy Phone Link'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Sign out / Lock button when viewing from a phone */}
+          {!networkInfo.isLocalhost && onLockDevice && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={onLockDevice}
+                className="inline-flex items-center gap-1.5 rounded-2xl bg-[var(--pastel-peach)] px-4 py-2 text-xs font-extrabold text-[var(--text-main)]"
+              >
+                <Lock className="h-3.5 w-3.5" />
+                Lock / Sign Out This Phone
+              </button>
+            </div>
+          )}
 
           {/* iPhone App Tracking via Apple Shortcuts */}
           <div className="mt-4 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)]/85 p-4">
@@ -372,7 +516,7 @@ export function SettingsPanel({
                     iPhone App Tracking (Apple Shortcuts)
                   </h4>
                   <p className="text-[11px] text-[var(--text-muted)]">
-                    Auto-log iPhone apps into Time &amp; Apps over home Wi-Fi
+                    Auto-log iPhone apps into Time &amp; Apps over home Wi-Fi (includes your auth key)
                   </p>
                 </div>
               </div>
@@ -393,11 +537,11 @@ export function SettingsPanel({
 
             <div className="mt-3 flex items-center gap-2 rounded-xl border border-[var(--border-card)] bg-[var(--bg-input)] px-3 py-2">
               <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--text-main)]">
-                {mobileWebhookUrl}
+                {accessToken ? `${primaryLanUrl}/api/app-usage/mobile-event?token=••••••` : mobileWebhookUrl}
               </code>
               <button
                 type="button"
-                onClick={() => void handleCopyWebhook()}
+                onClick={() => void copyText(mobileWebhookUrl, setCopiedUrl)}
                 className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--pastel-sky)] px-2.5 py-1 text-[11px] font-bold text-[var(--text-main)]"
               >
                 {copiedUrl ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
@@ -419,7 +563,7 @@ export function SettingsPanel({
               </li>
               <li>
                 Add action <strong className="text-[var(--text-main)]">Get Contents of URL</strong>{' '}
-                → paste the URL above → set Method to{' '}
+                → paste the copied URL above → set Method to{' '}
                 <strong className="text-[var(--text-main)]">POST</strong> → Request Body{' '}
                 <strong className="text-[var(--text-main)]">JSON</strong> with fields:{' '}
                 <code className="rounded bg-[var(--bg-subtle)] px-1 font-mono text-[var(--text-main)]">
